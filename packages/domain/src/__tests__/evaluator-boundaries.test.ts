@@ -476,6 +476,80 @@ describe("priority evaluator boundaries", () => {
 		expect(verdict.facts).toMatchObject({ actual: "6D", expected: "6D" });
 	});
 
+	it("keeps a direct 5NT Grand Slam Force outside Blackwood", () => {
+		const evaluationInput = input("32.AK432.Q32.432", [
+			["S", "1H"],
+			["W", "PASS"],
+			["N", "2H"],
+			["E", "PASS"],
+			["S", "5NT"],
+			["W", "PASS"],
+			["N", "7H"],
+		]);
+
+		expect(
+			evaluateOfficialItem("A-RR-06", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+		expect(
+			evaluateOfficialItem("A-RR-08", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+
+		const heroAsAsker = input("AKQJ.AKQ.432.32", [
+			["N", "1H"],
+			["E", "PASS"],
+			["S", "2H"],
+			["W", "PASS"],
+			["N", "5NT"],
+		]);
+		expect(evaluateOfficialItem("A-RR-06", heroAsAsker).automaticVerdict).toBe(
+			"NOT_APPLICABLE"
+		);
+		expect(evaluateOfficialItem("A-RR-08", heroAsAsker).automaticVerdict).toBe(
+			"COMPLIED"
+		);
+	});
+
+	it("keeps a 5NT king ask after Blackwood outside Grand Slam Force", () => {
+		const evaluationInput = input("AQ32.AK32.432.32", [
+			["S", "1H"],
+			["W", "PASS"],
+			["N", "2H"],
+			["E", "PASS"],
+			["S", "4NT"],
+			["W", "PASS"],
+			["N", "5H"],
+			["E", "PASS"],
+			["S", "5NT"],
+			["W", "PASS"],
+			["N", "6D"],
+		]);
+
+		expect(
+			evaluateOfficialItem("A-RR-06", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+		expect(
+			evaluateOfficialItem("A-RR-08", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+
+		const heroAsAsker = input("AKQJ.AKQ.432.32", [
+			["N", "1H"],
+			["E", "PASS"],
+			["S", "2H"],
+			["W", "PASS"],
+			["N", "4NT"],
+			["E", "PASS"],
+			["S", "5H"],
+			["W", "PASS"],
+			["N", "5NT"],
+		]);
+		expect(evaluateOfficialItem("A-RR-06", heroAsAsker).automaticVerdict).toBe(
+			"COMPLIED"
+		);
+		expect(evaluateOfficialItem("A-RR-08", heroAsAsker).automaticVerdict).toBe(
+			"NOT_APPLICABLE"
+		);
+	});
+
 	it("evaluates a Feature-ask response from the Weak Two opener", () => {
 		const verdict = evaluateOfficialItem(
 			"A-RR-05",

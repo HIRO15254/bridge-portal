@@ -1308,6 +1308,20 @@ function evaluateBlackwood(rule: RuleDefinition, context: EvaluationContext) {
 					action
 				);
 	}
+	const directGrandSlamForceAsk = context.calls.some(
+		(candidate) =>
+			samePartnership(candidate.seat, context.heroSeat) &&
+			normalizeCall(candidate.call) === "5NT" &&
+			!context.calls.some(
+				(prior) =>
+					prior.index < candidate.index &&
+					samePartnership(prior.seat, context.heroSeat) &&
+					normalizeCall(prior.call) === "4NT"
+			)
+	);
+	if (directGrandSlamForceAsk) {
+		return notApplicable(rule, "DIRECT_5NT_RESERVED_FOR_GRAND_SLAM_FORCE");
+	}
 	const opportunity = context.heroCalls.find((candidate) => {
 		const bid = parseBid(candidate.call);
 		return Boolean(
@@ -1556,6 +1570,14 @@ function evaluateGrandSlamForce(
 					{ hcp: context.points, trump: fit?.strain ?? null },
 					action
 				);
+	}
+	const blackwoodSequence = context.calls.some(
+		(candidate) =>
+			samePartnership(candidate.seat, context.heroSeat) &&
+			normalizeCall(candidate.call) === "4NT"
+	);
+	if (blackwoodSequence) {
+		return notApplicable(rule, "FIVE_NT_FOLLOWS_BLACKWOOD_SEQUENCE");
 	}
 	const opportunity = context.heroCalls.find((candidate) => {
 		const bid = parseBid(candidate.call);
