@@ -279,6 +279,7 @@ function SystemEditor({
 						"balancingTakeoutDoubleMinHcp"
 					),
 					negativeDoubleMinHcp: numberValue(data, "negativeDoubleMinHcp"),
+					negativeDoubleMaxLevel: numberValue(data, "negativeDoubleMaxLevel"),
 					sosRedoubleMaxHcp: numberValue(data, "sosRedoubleMaxHcp"),
 					gameForcingCueMinHcp: numberValue(data, "gameForcingCueMinHcp"),
 					supportCueMinHcp: numberValue(data, "supportCueMinHcp"),
@@ -506,6 +507,11 @@ function SystemEditor({
 			"negativeDoubleMinHcp",
 			"Negative Double下限",
 			draft.settings.competitive.negativeDoubleMinHcp,
+		],
+		[
+			"negativeDoubleMaxLevel",
+			"Negative Double上限level",
+			draft.settings.competitive.negativeDoubleMaxLevel,
 		],
 		[
 			"sosRedoubleMaxHcp",

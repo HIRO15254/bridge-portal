@@ -2298,13 +2298,19 @@ function evaluateNegativeDouble(
 			suit !== overcallBid.strain &&
 			context.lengths[suit] >= 4
 	);
+	const maximumLevel =
+		context.system.settings.competitive.negativeDoubleMaxLevel;
+	const withinLevel = overcallBid.level <= maximumLevel;
 	const eligible = Boolean(
-		unbidMajor &&
+		withinLevel &&
+			unbidMajor &&
 			context.points >= context.system.settings.competitive.negativeDoubleMinHcp
 	);
 	const call = normalizeCall(action.call);
 	const facts = {
 		hcp: context.points,
+		maximumLevel,
+		overcallLevel: overcallBid.level,
 		unbidMajor: unbidMajor ?? null,
 	};
 	if (call === "X") {
@@ -2328,9 +2334,21 @@ function evaluateSosRedouble(rule: RuleDefinition, context: EvaluationContext) {
 				(call) => call.index > double.index && call.seat === context.heroSeat
 			)
 		: undefined;
-	if (!action) {
+	if (!(double && action)) {
 		return notApplicable(rule);
 	}
+	const doubledContract = [...callsBefore(context, double)]
+		.reverse()
+		.find((candidate) => Boolean(parseBid(candidate.call)));
+	const doubledBid = doubledContract
+		? parseBid(doubledContract.call)
+		: undefined;
+	const ownLowContract = Boolean(
+		doubledContract &&
+			doubledBid &&
+			samePartnership(doubledContract.seat, context.heroSeat) &&
+			doubledBid.level <= 2
+	);
 	const alternativeSuits = (["S", "H", "D", "C"] as const).filter(
 		(suit) => context.lengths[suit] >= 4
 	).length;
@@ -2338,13 +2356,26 @@ function evaluateSosRedouble(rule: RuleDefinition, context: EvaluationContext) {
 		context.points <= context.system.settings.competitive.sosRedoubleMaxHcp &&
 		alternativeSuits >= 2;
 	const call = normalizeCall(action.call);
-	const facts = { alternativeSuits, hcp: context.points };
+	const facts = {
+		alternativeSuits,
+		contract: normalizeCall(doubledContract?.call ?? ""),
+		hcp: context.points,
+		ownLowContract,
+	};
 	if (call === "XX") {
+		if (!ownLowContract) {
+			return wrong(
+				rule,
+				"SOS_REDOUBLE_NOT_OVER_OWN_LOW_CONTRACT",
+				facts,
+				action
+			);
+		}
 		return eligible
 			? complied(rule, "SOS_REDOUBLE_ESCAPE_SHAPE_MET", facts, action)
 			: wrong(rule, "SOS_REDOUBLE_ESCAPE_SHAPE_FAILED", facts, action);
 	}
-	return eligible
+	return ownLowContract && eligible
 		? missed(rule, "SOS_REDOUBLE_MISSED", { ...facts, actual: call }, action)
 		: notApplicable(rule);
 }

@@ -74,6 +74,7 @@ describe("system settings", () => {
 		const normalized = normalizeSystemSettings(legacySettings);
 
 		expect(normalized.competitive.takeoutDoubleMinHcp).toBe(12);
+		expect(normalized.competitive.negativeDoubleMaxLevel).toBe(3);
 		expect(normalized.competitive.balancingTakeoutDoubleMinHcp).toBe(9);
 		expect(normalized.opening.allowSingletonTopHonor).toBe(false);
 		expect(normalized.opening.fourPlusNtMinHcp).toBe(28);

@@ -1045,6 +1045,45 @@ describe("priority evaluator boundaries", () => {
 		expect(verdict.reasonCode).toBe("LIGHTNER_NT_SLAM_INTENT_NOT_OBJECTIVE");
 	});
 
+	it("rejects an SOS Redouble above a low-level contract", () => {
+		const verdict = evaluateOfficialItem(
+			"A-CD-06",
+			input("9876.7654.32.432", [
+				["S", "4H"],
+				["W", "X"],
+				["N", "XX"],
+			])
+		);
+
+		expect(verdict.automaticVerdict).toBe("DEVIATED_WRONG_APPLICATION");
+		expect(verdict.reasonCode).toBe("SOS_REDOUBLE_NOT_OVER_OWN_LOW_CONTRACT");
+	});
+
+	it("enforces the configured Negative Double level limit", () => {
+		const calls: [Seat, string][] = [
+			["S", "1D"],
+			["W", "4C"],
+			["N", "X"],
+		];
+		const hand = "32.KQJ9.432.432";
+		const outside = evaluateOfficialItem("A-CD-05", input(hand, calls));
+		const settings = {
+			...defaultSystemSettings,
+			competitive: {
+				...defaultSystemSettings.competitive,
+				negativeDoubleMaxLevel: 4,
+			},
+		};
+		const inside = evaluateOfficialItem(
+			"A-CD-05",
+			input(hand, calls, { settings })
+		);
+
+		expect(outside.automaticVerdict).toBe("DEVIATED_WRONG_APPLICATION");
+		expect(outside.facts).toMatchObject({ maximumLevel: 3, overcallLevel: 4 });
+		expect(inside.automaticVerdict).toBe("COMPLIED");
+	});
+
 	it("uses the balancing Takeout Double threshold after two passes", () => {
 		const calls: [Seat, string][] = [
 			["E", "1H"],
