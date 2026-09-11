@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { dealToPbn, parseFunbridgeJson } from "../funbridge";
 import {
 	contractResultToTricks,
 	createDoubleDummyPbnTags,
 	exportPbn,
 	parsePbn,
 } from "../pbn";
+import capturedBpCircuitFixture from "./fixtures/funbridge-bp-circuit-captured-anonymized.json";
 
 const SAMPLE = `% PBN 2.1
 [Event "Daily Asia"]
@@ -65,9 +67,37 @@ describe("PBN profile", () => {
 		expect(reparsed.games[0]?.play?.map((action) => action.card)).toEqual(
 			parsed.games[0]?.play?.map((action) => action.card)
 		);
+		expect(reparsed.games[0]?.play?.map((action) => action.seat)).toEqual(
+			parsed.games[0]?.play?.map((action) => action.seat)
+		);
 		expect(reparsed.games[0]?.tags.Result).toBe(parsed.games[0]?.tags.Result);
 		expect(reparsed.games[0]?.tags.DoubleDummyTable).toBe('{"EW":3,"NS":10}');
 		expect(reparsed.games[0]?.tags.ParContracts).toBe("4S N");
+	});
+
+	it("round-trips a complete play when successive trick leaders change", () => {
+		const imported = parseFunbridgeJson(
+			JSON.stringify(capturedBpCircuitFixture)
+		);
+		const board = imported.boards[0];
+		if (!board?.play) {
+			throw new Error("Captured fixture has no play");
+		}
+		const game = {
+			auction: board.auction,
+			incompleteAuction: false,
+			incompletePlay: false,
+			play: board.play,
+			tags: {
+				Contract: board.deal.contract ?? "?",
+				Deal: dealToPbn(board.deal),
+				Declarer: board.deal.declarer ?? "?",
+				Play: board.play[0]?.seat ?? "W",
+			},
+			warnings: [],
+		};
+		const reparsed = parsePbn(exportPbn([game])).games[0];
+		expect(reparsed?.play).toEqual(board.play);
 	});
 
 	it("converts a stored result delta to the PBN trick count", () => {

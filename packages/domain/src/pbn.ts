@@ -5,6 +5,8 @@ const noteTokenPattern = /^=\d+=$/;
 const whitespacePattern = /\s+/;
 const cardTokenPattern = /^[SHDC][AKQJT2-9]$/i;
 const contractPattern = /^([1-7])(?:C|D|H|S|NT)/i;
+const contractStrainPattern = /^[1-7](C|D|H|S|NT)/i;
+const rankStrength = "23456789TJQKA";
 const requiredTournamentTags = [
 	"FunbridgeTournamentId",
 	"FunbridgeTournamentFamily",
@@ -101,25 +103,69 @@ function callsFrom(tokens: string[], dealer: Seat): AuctionCall[] {
 	return calls;
 }
 
-function playFrom(tokens: string[], first: Seat): PlayAction[] {
+function winningSeat(
+	actions: readonly Pick<PlayAction, "card" | "seat">[],
+	contract: string | undefined
+): Seat | undefined {
+	if (actions.length !== 4) {
+		return;
+	}
+	const strain = contractStrainPattern.exec(contract ?? "")?.[1]?.toUpperCase();
+	const trump = strain && strain !== "NT" ? strain : undefined;
+	const ledSuit = actions[0]?.card[0];
+	const trumpCards = trump
+		? actions.filter((action) => action.card[0] === trump)
+		: [];
+	const eligible = trumpCards.length
+		? trumpCards
+		: actions.filter((action) => action.card[0] === ledSuit);
+	return [...eligible].sort(
+		(left, right) =>
+			rankStrength.indexOf(right.card[1] ?? "") -
+			rankStrength.indexOf(left.card[1] ?? "")
+	)[0]?.seat;
+}
+
+function playFrom(
+	tokens: string[],
+	firstColumn: Seat,
+	contract: string | undefined
+): PlayAction[] {
 	const plays: PlayAction[] = [];
-	for (const token of tokens) {
-		if (
-			token === "*" ||
-			token === "+" ||
-			token === "-" ||
-			noteTokenPattern.test(token) ||
-			token.startsWith("$") ||
-			token.startsWith("^")
-		) {
+	const tableTokens = tokens.filter(
+		(token) => token === "-" || token === "+" || cardTokenPattern.test(token)
+	);
+	let leader: Seat | undefined;
+	for (let offset = 0; offset < tableTokens.length; offset += 4) {
+		const row = tableTokens.slice(offset, offset + 4);
+		const bySeat = new Map<Seat, string>();
+		for (let column = 0; column < row.length; column += 1) {
+			const token = row[column] ?? "-";
+			if (!cardTokenPattern.test(token)) {
+				continue;
+			}
+			bySeat.set(nextSeat(firstColumn, column), token.toUpperCase());
+		}
+		leader ??= [...bySeat.keys()][0];
+		if (!leader) {
 			continue;
 		}
-		plays.push({
-			card: token.toUpperCase(),
-			index: plays.length,
-			seat: nextSeat(first, plays.length),
-			trickNumber: Math.floor(plays.length / 4) + 1,
-		});
+		const trickNumber = Math.floor(offset / 4) + 1;
+		const actions: PlayAction[] = [];
+		for (let turn = 0; turn < 4; turn += 1) {
+			const seat = nextSeat(leader, turn);
+			const card = bySeat.get(seat);
+			if (card) {
+				actions.push({
+					card,
+					index: plays.length + actions.length,
+					seat,
+					trickNumber,
+				});
+			}
+		}
+		plays.push(...actions);
+		leader = winningSeat(actions, contract) ?? leader;
 	}
 	return plays;
 }
@@ -189,7 +235,7 @@ export function parsePbn(source: string): PbnDocument {
 				tokens.includes("*") ||
 				tokens.includes("+") ||
 				tokens.filter((token) => cardTokenPattern.test(token)).length < 52;
-			game.play = playFrom(tokens, value as Seat);
+			game.play = playFrom(tokens, value as Seat, game.tags.Contract);
 		}
 	}
 	for (const parsed of games) {
@@ -211,6 +257,28 @@ export function parsePbn(source: string): PbnDocument {
 
 function escapeValue(value: string): string {
 	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function playLines(game: PbnGame): string[] {
+	if (!game.play) {
+		return [];
+	}
+	const firstColumn = (game.tags.Play ?? game.play[0]?.seat ?? "W") as Seat;
+	const ordered = [...game.play].sort(
+		(left, right) => left.index - right.index
+	);
+	const trickNumbers = [
+		...new Set(ordered.map((action) => action.trickNumber)),
+	];
+	return trickNumbers.map((trickNumber) => {
+		const trick = ordered.filter(
+			(action) => action.trickNumber === trickNumber
+		);
+		return Array.from({ length: 4 }, (_, column) => {
+			const seat = nextSeat(firstColumn, column);
+			return trick.find((action) => action.seat === seat)?.card ?? "-";
+		}).join(" ");
+	});
 }
 
 export function exportPbn(games: PbnGame[]): string {
@@ -255,14 +323,7 @@ export function exportPbn(games: PbnGame[]): string {
 		}
 		if (game.play) {
 			sections.push(`[Play "${game.tags.Play ?? "W"}"]`);
-			for (let i = 0; i < game.play.length; i += 4) {
-				sections.push(
-					game.play
-						.slice(i, i + 4)
-						.map((action) => action.card)
-						.join(" ")
-				);
-			}
+			sections.push(...playLines(game));
 			if (game.incompletePlay) {
 				sections.push("*");
 			}
