@@ -18,7 +18,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	component: RootComponent,
 	head: () => ({
 		meta: [
-			{ title: "Better T App Template" },
+			{ title: "Bridge Portal" },
 			{
 				name: "description",
 				content: "A Cloudflare-ready TypeScript application template",

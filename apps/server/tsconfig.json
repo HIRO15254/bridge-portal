@@ -1,5 +1,5 @@
 {
-  "extends": "@better-t-app-template/config/tsconfig.base.json",
+  "extends": "@bridge-portal/config/tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"

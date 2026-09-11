@@ -18,7 +18,7 @@ function HomePage() {
 					Cloudflare starter
 				</p>
 				<h1 className="font-semibold text-4xl tracking-tight sm:text-5xl">
-					Better T App Template
+					Bridge Portal
 				</h1>
 				<p className="max-w-xl text-lg text-muted-foreground">
 					React, Hono, tRPC, and an empty D1 database—ready for your

@@ -1,5 +1,5 @@
 {
-  "name": "better-t-app-template",
+  "name": "bridge-portal",
   "private": true,
   "workspaces": {
     "packages": [
@@ -21,12 +21,12 @@
     "dev": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
     "check-types": "bun run --filter '*' check-types && tsc -p scripts/tsconfig.json --noEmit",
-    "dev:web": "bun run --filter @better-t-app-template/web dev",
-    "dev:server": "bun run --filter @better-t-app-template/server dev",
-    "db:generate": "bun run --filter @better-t-app-template/db db:generate",
+    "dev:web": "bun run --filter @bridge-portal/web dev",
+    "dev:server": "bun run --filter @bridge-portal/server dev",
+    "db:generate": "bun run --filter @bridge-portal/db db:generate",
     "db:migrate:local": "bun scripts/d1-migrate.ts local",
     "db:migrate:remote": "bun scripts/d1-migrate.ts remote",
-    "db:studio": "bun run --filter @better-t-app-template/db db:studio",
+    "db:studio": "bun run --filter @bridge-portal/db db:studio",
     "cf:typegen": "bunx wrangler types apps/server/worker-configuration.d.ts -c apps/server/wrangler.jsonc",
     "cf:typegen:check": "bunx wrangler types apps/server/worker-configuration.d.ts --check -c apps/server/wrangler.jsonc",
     "test": "vitest run",

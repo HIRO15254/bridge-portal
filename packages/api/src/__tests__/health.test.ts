@@ -1,4 +1,4 @@
-import { createDb } from "@better-t-app-template/db";
+import { createDb } from "@bridge-portal/db";
 import { describe, expect, it } from "vitest";
 
 import { appRouter } from "../routers/index";

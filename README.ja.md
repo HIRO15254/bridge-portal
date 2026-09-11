@@ -1,4 +1,4 @@
-# Better T App Template
+# Bridge Portal
 
 Cloudflare向けの最小構成フルスタックスターターです。Pages上のReact、Hono/tRPC Worker、初期状態では空のD1データベースで構成されます。
 

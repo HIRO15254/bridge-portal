@@ -92,7 +92,7 @@ jobs:
       - name: Build web
         env:
           VITE_SERVER_URL: ${{ vars.PRODUCTION_API_URL }}
-        run: bun run --filter @better-t-app-template/web build
+        run: bun run --filter @bridge-portal/web build
       - name: Deploy Pages
         run: |
           app_slug=$(jq -r '.name' package.json)

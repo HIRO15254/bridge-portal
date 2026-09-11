@@ -1,4 +1,4 @@
-# Better T App Template
+# Bridge Portal
 
 A deliberately small full-stack starter for Cloudflare: React on Pages, a Hono/tRPC Worker, and an initially empty D1 database.
 

@@ -4,9 +4,9 @@
 
 アプリケーションを稼働させるCloudflare accountに次のリソースを作成します。
 
-1. `better-t-app-template-db`という本番D1 database
-2. `better-t-app-template`というPages project
-3. `better-t-app-template-api`というWorker API（最初の本番deployで作成しても構いません）
+1. `bridge-portal-db`という本番D1 database
+2. `bridge-portal`というPages project
+3. `bridge-portal-api`というWorker API（最初の本番deployで作成しても構いません）
 
 本番D1 UUIDを`apps/server/wrangler.jsonc`へ設定します。deploy可能な派生プロジェクトでは、全ゼロのplaceholderをcommitしないでください。GitHub repository variablesに次を設定します。
 

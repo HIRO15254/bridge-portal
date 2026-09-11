@@ -1,5 +1,5 @@
 {
-  "name": "@better-t-app-template/db",
+  "name": "@bridge-portal/db",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,7 +15,7 @@
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
-    "@better-t-app-template/config": "workspace:*",
+    "@bridge-portal/config": "workspace:*",
     "drizzle-kit": "^0.31.10",
     "typescript": "catalog:",
     "vitest": "4.1.2"

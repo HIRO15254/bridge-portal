@@ -1,4 +1,4 @@
 {
-  "extends": "@better-t-app-template/config/tsconfig.base.json",
+  "extends": "@bridge-portal/config/tsconfig.base.json",
   "include": ["src"]
 }

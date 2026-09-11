@@ -1,4 +1,4 @@
-# Better T App Template agent guide
+# Bridge Portal agent guide
 
 This file is the source of truth for every coding agent working in this repository.
 

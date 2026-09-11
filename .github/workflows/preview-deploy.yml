@@ -194,7 +194,7 @@ jobs:
       - name: Build web
         env:
           VITE_SERVER_URL: ${{ needs.setup.outputs.api_url }}
-        run: bun run --filter @better-t-app-template/web build
+        run: bun run --filter @bridge-portal/web build
       - name: Deploy preview Pages
         env:
           PAGES_PROJECT: ${{ needs.setup.outputs.pages_project }}

@@ -1,5 +1,5 @@
 {
-  "name": "@better-t-app-template/env",
+  "name": "@bridge-portal/env",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@better-t-app-template/config": "workspace:*",
+    "@bridge-portal/config": "workspace:*",
     "typescript": "catalog:"
   }
 }

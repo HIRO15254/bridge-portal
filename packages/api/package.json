@@ -1,5 +1,5 @@
 {
-  "name": "@better-t-app-template/api",
+  "name": "@bridge-portal/api",
   "private": true,
   "type": "module",
   "exports": {
@@ -10,11 +10,11 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@better-t-app-template/db": "workspace:*",
+    "@bridge-portal/db": "workspace:*",
     "@trpc/server": "catalog:"
   },
   "devDependencies": {
-    "@better-t-app-template/config": "workspace:*",
+    "@bridge-portal/config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "4.1.2"
   }

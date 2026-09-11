@@ -1,5 +1,5 @@
 {
-  "name": "@better-t-app-template/server",
+  "name": "@bridge-portal/server",
   "private": true,
   "type": "module",
   "main": "src/worker.ts",
@@ -9,14 +9,14 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
-    "@better-t-app-template/api": "workspace:*",
-    "@better-t-app-template/db": "workspace:*",
+    "@bridge-portal/api": "workspace:*",
+    "@bridge-portal/db": "workspace:*",
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {
-    "@better-t-app-template/config": "workspace:*",
+    "@bridge-portal/config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "4.1.2",
     "wrangler": "4.80.0"

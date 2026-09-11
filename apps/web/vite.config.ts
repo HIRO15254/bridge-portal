@@ -13,8 +13,8 @@ export default defineConfig({
 		VitePWA({
 			registerType: "autoUpdate",
 			manifest: {
-				name: "Better T App Template",
-				short_name: "Better T App Template",
+				name: "Bridge Portal",
+				short_name: "Bridge Portal",
 				description: "A Cloudflare-ready TypeScript application template",
 				theme_color: "#171717",
 			},

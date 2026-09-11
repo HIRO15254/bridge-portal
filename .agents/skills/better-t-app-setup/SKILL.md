@@ -1,6 +1,6 @@
 ---
 name: better-t-app-setup
-description: Rename a project derived from Better T App Template and prepare or verify its command-line Cloudflare deployment environment. Use when initializing the template, changing its slug or display name, configuring D1, Workers, Pages, or GitHub Actions with Bun, Wrangler, and GitHub CLI, or running deployment preflight checks. Do not use for product feature development or perform remote changes unless the user explicitly requests them.
+description: Rename a project derived from Bridge Portal and prepare or verify its command-line Cloudflare deployment environment. Use when initializing the template, changing its slug or display name, configuring D1, Workers, Pages, or GitHub Actions with Bun, Wrangler, and GitHub CLI, or running deployment preflight checks. Do not use for product feature development or perform remote changes unless the user explicitly requests them.
 ---
 
 # Better T App Setup

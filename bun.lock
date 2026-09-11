@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "better-t-app-template",
+      "name": "bridge-portal",
       "devDependencies": {
         "@biomejs/biome": "2.4.10",
         "@types/bun": "catalog:",
@@ -18,27 +18,27 @@
       },
     },
     "apps/server": {
-      "name": "@better-t-app-template/server",
+      "name": "@bridge-portal/server",
       "dependencies": {
-        "@better-t-app-template/api": "workspace:*",
-        "@better-t-app-template/db": "workspace:*",
+        "@bridge-portal/api": "workspace:*",
+        "@bridge-portal/db": "workspace:*",
         "@hono/trpc-server": "^0.4.2",
         "@trpc/server": "catalog:",
         "hono": "catalog:",
       },
       "devDependencies": {
-        "@better-t-app-template/config": "workspace:*",
+        "@bridge-portal/config": "workspace:*",
         "typescript": "catalog:",
         "vitest": "4.1.2",
         "wrangler": "4.80.0",
       },
     },
     "apps/web": {
-      "name": "@better-t-app-template/web",
+      "name": "@bridge-portal/web",
       "version": "0.0.0",
       "dependencies": {
-        "@better-t-app-template/api": "workspace:*",
-        "@better-t-app-template/env": "workspace:*",
+        "@bridge-portal/api": "workspace:*",
+        "@bridge-portal/env": "workspace:*",
         "@tailwindcss/vite": "^4.2.2",
         "@tanstack/react-query": "^5.96.2",
         "@tanstack/react-router": "^1.168.10",
@@ -52,7 +52,7 @@
         "vite-plugin-pwa": "^1.2.0",
       },
       "devDependencies": {
-        "@better-t-app-template/config": "workspace:*",
+        "@bridge-portal/config": "workspace:*",
         "@tanstack/router-plugin": "^1.168.10",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
@@ -68,42 +68,42 @@
       },
     },
     "packages/api": {
-      "name": "@better-t-app-template/api",
+      "name": "@bridge-portal/api",
       "dependencies": {
-        "@better-t-app-template/db": "workspace:*",
+        "@bridge-portal/db": "workspace:*",
         "@trpc/server": "catalog:",
       },
       "devDependencies": {
-        "@better-t-app-template/config": "workspace:*",
+        "@bridge-portal/config": "workspace:*",
         "typescript": "catalog:",
         "vitest": "4.1.2",
       },
     },
     "packages/config": {
-      "name": "@better-t-app-template/config",
+      "name": "@bridge-portal/config",
       "version": "0.0.0",
     },
     "packages/db": {
-      "name": "@better-t-app-template/db",
+      "name": "@bridge-portal/db",
       "dependencies": {
         "drizzle-orm": "catalog:",
       },
       "devDependencies": {
-        "@better-t-app-template/config": "workspace:*",
+        "@bridge-portal/config": "workspace:*",
         "drizzle-kit": "^0.31.10",
         "typescript": "catalog:",
         "vitest": "4.1.2",
       },
     },
     "packages/env": {
-      "name": "@better-t-app-template/env",
+      "name": "@bridge-portal/env",
       "version": "0.0.0",
       "dependencies": {
         "@t3-oss/env-core": "^0.13.11",
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@better-t-app-template/config": "workspace:*",
+        "@bridge-portal/config": "workspace:*",
         "typescript": "catalog:",
       },
     },
@@ -310,17 +310,17 @@
 
     "@babel/types": ["@babel/types@7.29.8", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg=="],
 
-    "@better-t-app-template/api": ["@better-t-app-template/api@workspace:packages/api"],
+    "@bridge-portal/api": ["@bridge-portal/api@workspace:packages/api"],
 
-    "@better-t-app-template/config": ["@better-t-app-template/config@workspace:packages/config"],
+    "@bridge-portal/config": ["@bridge-portal/config@workspace:packages/config"],
 
-    "@better-t-app-template/db": ["@better-t-app-template/db@workspace:packages/db"],
+    "@bridge-portal/db": ["@bridge-portal/db@workspace:packages/db"],
 
-    "@better-t-app-template/env": ["@better-t-app-template/env@workspace:packages/env"],
+    "@bridge-portal/env": ["@bridge-portal/env@workspace:packages/env"],
 
-    "@better-t-app-template/server": ["@better-t-app-template/server@workspace:apps/server"],
+    "@bridge-portal/server": ["@bridge-portal/server@workspace:apps/server"],
 
-    "@better-t-app-template/web": ["@better-t-app-template/web@workspace:apps/web"],
+    "@bridge-portal/web": ["@bridge-portal/web@workspace:apps/web"],
 
     "@biomejs/biome": ["@biomejs/biome@2.4.10", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.4.10", "@biomejs/cli-darwin-x64": "2.4.10", "@biomejs/cli-linux-arm64": "2.4.10", "@biomejs/cli-linux-arm64-musl": "2.4.10", "@biomejs/cli-linux-x64": "2.4.10", "@biomejs/cli-linux-x64-musl": "2.4.10", "@biomejs/cli-win32-arm64": "2.4.10", "@biomejs/cli-win32-x64": "2.4.10" }, "bin": { "biome": "bin/biome" } }, "sha512-xxA3AphFQ1geij4JTHXv4EeSTda1IFn22ye9LdyVPoJU19fNVl0uzfEuhsfQ4Yue/0FaLs2/ccVi4UDiE7R30w=="],
 
