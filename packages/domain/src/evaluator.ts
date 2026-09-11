@@ -2393,9 +2393,11 @@ function expectedLeadRank(
 	if (holding.includes("A") && holding.includes("K")) {
 		return context.system.settings.lead.fromAk;
 	}
-	for (const sequence of ["AKQ", "KQJ", "QJT", "JT9"]) {
-		if ([...sequence].every((rank) => holding.includes(rank))) {
-			return sequence[0];
+	if (hasVariant(context, "A-CA-01", "Honor sequence")) {
+		for (const sequence of ["AKQ", "KQJ", "QJT", "JT9"]) {
+			if ([...sequence].every((rank) => holding.includes(rank))) {
+				return sequence[0];
+			}
 		}
 	}
 	if (honorPattern.test(holding)) {

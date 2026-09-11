@@ -87,6 +87,22 @@ describe("priority evaluator boundaries", () => {
 		).toBe("COMPLIED");
 	});
 
+	it("does not apply the honor-sequence lead when that variant is not adopted", () => {
+		const evaluationInput = input("KQJ9.432.432.32", [], {
+			selectedVariants: {
+				"A-CA-01": ["Fourth highest", "A from AK"],
+			},
+		});
+		evaluationInput.deal.declarer = "E";
+		evaluationInput.play = [
+			{ card: "SK", index: 0, seat: "N", trickNumber: 1 },
+		];
+
+		expect(
+			evaluateOfficialItem("A-CA-01", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+	});
+
 	it.each([
 		["Natural 2NT shape", "AKQJT9.AKQ.J2.32", "2NT"],
 		["Natural 4+-level NT range", "AKQJ.AKQ.J32.432", "4NT"],
