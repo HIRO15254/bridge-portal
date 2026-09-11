@@ -685,6 +685,84 @@ describe("priority evaluator boundaries", () => {
 		).toBe("NOT_APPLICABLE");
 	});
 
+	it.each([
+		{
+			call: "2C",
+			hand: "32.32.432.AKQJ98",
+			opening: "1NT",
+			removedItem: "A-RR-02",
+		},
+		{
+			call: "4C",
+			hand: "32.32.432.AKQJ98",
+			opening: "1NT",
+			removedItem: "A-RR-07",
+		},
+	] as const)("evaluates $call as natural when its NT convention is not adopted", ({
+		call,
+		hand,
+		opening,
+		removedItem,
+	}) => {
+		const evaluationInput = input(
+			hand,
+			[
+				["S", opening],
+				["W", "PASS"],
+				["N", call],
+			],
+			{
+				adoptedOfficialItemIds: allIds.filter((id) => id !== removedItem),
+			}
+		);
+
+		expect(
+			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+	});
+
+	it("evaluates 2D naturally when the artificial response is not adopted", () => {
+		const evaluationInput = input(
+			"32.32.AQJT9.KQ32",
+			[
+				["S", "2C"],
+				["W", "PASS"],
+				["N", "2D"],
+			],
+			{
+				adoptedOfficialItemIds: allIds.filter(
+					(id) => !["A-OB-02", "A-RR-03"].includes(id)
+				),
+			}
+		);
+		evaluationInput.deal.hands.S = "32.AKQ.AKQ.JT987";
+
+		expect(
+			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+	});
+
+	it("evaluates 2NT naturally when neither two-level inquiry is adopted", () => {
+		const evaluationInput = input(
+			"KQ32.AJ32.432.32",
+			[
+				["S", "2H"],
+				["W", "PASS"],
+				["N", "2NT"],
+			],
+			{
+				adoptedOfficialItemIds: allIds.filter(
+					(id) => !["A-RR-04", "A-RR-05"].includes(id)
+				),
+			}
+		);
+		evaluationInput.deal.hands.S = "32.KQJT98.432.32";
+
+		expect(
+			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+	});
+
 	it("does not classify an invalid short 2H opening as Weak Two", () => {
 		const evaluationInput = input("KQ32.AJ32.432.32", [
 			["S", "2H"],
@@ -870,6 +948,22 @@ describe("priority evaluator boundaries", () => {
 			evaluateOfficialItem("A-CD-04", input(noVoidHand, calls, { settings }))
 				.automaticVerdict
 		).toBe("COMPLIED");
+	});
+
+	it.each([
+		"X",
+		"PASS",
+	])("does not guess Lightner intent over a notrump slam when hero calls %s", (call) => {
+		const verdict = evaluateOfficialItem(
+			"A-CD-04",
+			input("9876.765.432.432", [
+				["E", "6NT"],
+				["N", call],
+			])
+		);
+
+		expect(verdict.automaticVerdict).toBe("INDETERMINATE");
+		expect(verdict.reasonCode).toBe("LIGHTNER_NT_SLAM_INTENT_NOT_OBJECTIVE");
 	});
 
 	it("uses the balancing Takeout Double threshold after two passes", () => {
