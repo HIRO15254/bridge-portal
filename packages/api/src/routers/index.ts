@@ -29,7 +29,7 @@ import {
 	validateSystemDraft,
 } from "@bridge-portal/domain";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { protectedProcedure, publicProcedure, router } from "../index";
@@ -250,6 +250,7 @@ const rulesRouter = router({
 					and(
 						eq(ruleEvaluation.ruleVersionId, rule.versionId),
 						eq(tournament.userId, ctx.session.user.id),
+						eq(tournament.activeRevisionId, tournamentRevision.id),
 						sql`${evaluationRun.id} = (
 							select latest.id from evaluation_run as latest
 							where latest.board_attempt_id = ${boardAttempt.id}
@@ -659,10 +660,6 @@ const boardsRouter = router({
 const statisticsRouter = router({
 	summary: protectedProcedure.query(async ({ ctx }) => {
 		const effectiveVerdict = sql<string>`coalesce(${ruleEvaluationOverride.verdict}, ${ruleEvaluation.automaticVerdict})`;
-		const tournamentIds = ctx.db
-			.select({ id: tournament.id })
-			.from(tournament)
-			.where(eq(tournament.userId, ctx.session.user.id));
 		const rows = await ctx.db
 			.select({
 				verdict: effectiveVerdict,
@@ -681,13 +678,15 @@ const statisticsRouter = router({
 				tournamentRevision,
 				eq(tournamentRevision.id, boardAttempt.tournamentRevisionId)
 			)
+			.innerJoin(tournament, eq(tournament.id, tournamentRevision.tournamentId))
 			.leftJoin(
 				ruleEvaluationOverride,
 				eq(ruleEvaluationOverride.ruleEvaluationId, ruleEvaluation.id)
 			)
 			.where(
 				and(
-					inArray(tournamentRevision.tournamentId, tournamentIds),
+					eq(tournament.userId, ctx.session.user.id),
+					eq(tournament.activeRevisionId, tournamentRevision.id),
 					sql`${evaluationRun.id} = (
 						select latest.id from evaluation_run as latest
 						where latest.board_attempt_id = ${boardAttempt.id}
@@ -705,10 +704,6 @@ const statisticsRouter = router({
 	}),
 	ruleBreakdown: protectedProcedure.query(({ ctx }) => {
 		const effectiveVerdict = sql<string>`coalesce(${ruleEvaluationOverride.verdict}, ${ruleEvaluation.automaticVerdict})`;
-		const tournamentIds = ctx.db
-			.select({ id: tournament.id })
-			.from(tournament)
-			.where(eq(tournament.userId, ctx.session.user.id));
 		return ctx.db
 			.select({
 				averageScore: sql<number | null>`avg(${boardScore.value})`,
@@ -749,7 +744,8 @@ const statisticsRouter = router({
 			)
 			.where(
 				and(
-					inArray(tournamentRevision.tournamentId, tournamentIds),
+					eq(tournament.userId, ctx.session.user.id),
+					eq(tournament.activeRevisionId, tournamentRevision.id),
 					sql`${evaluationRun.id} = (
 						select latest.id from evaluation_run as latest
 						where latest.board_attempt_id = ${boardAttempt.id}

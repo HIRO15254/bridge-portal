@@ -38,15 +38,22 @@ function Login() {
 		setPending(true);
 		setError("");
 		const data = new FormData(event.currentTarget);
-		const result = await authClient.signIn.email({
-			email: String(data.get("email")),
-			password: String(data.get("password")),
-		});
-		setPending(false);
-		if (result.error) {
-			setError("メールアドレスまたはパスワードを確認してください。");
-		} else {
-			window.location.reload();
+		try {
+			const result = await authClient.signIn.email({
+				email: String(data.get("email")),
+				password: String(data.get("password")),
+			});
+			if (result.error) {
+				setError("メールアドレスまたはパスワードを確認してください。");
+			} else {
+				window.location.reload();
+			}
+		} catch {
+			setError(
+				"認証サーバーに接続できません。しばらくしてから再試行してください。"
+			);
+		} finally {
+			setPending(false);
 		}
 	}
 	return (

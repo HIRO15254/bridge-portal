@@ -13,7 +13,7 @@ import type {
 	SystemSnapshot,
 } from "./types";
 
-export const RULE_ENGINE_VERSION = "2.0.0" as const;
+export const RULE_ENGINE_VERSION = "2.1.0" as const;
 
 export interface EvaluationInput {
 	auction?: AuctionCall[];
@@ -482,10 +482,105 @@ function evaluateNaturalOpenerRebid(
 		: wrong(rule, "NATURAL_OPENER_REBID_OUTSIDE_AGREEMENT", facts, action);
 }
 
+function evaluateNaturalResponderRebid(
+	rule: RuleDefinition,
+	context: EvaluationContext
+): RuleEvaluationResult | undefined {
+	const opening = openingBy(context, partner(context.heroSeat));
+	if (!opening) {
+		return;
+	}
+	const response = responseAfter(context, opening);
+	if (!response) {
+		return;
+	}
+	const partnerRebid = context.calls.find(
+		(call) =>
+			call.index > response.index &&
+			call.seat === partner(context.heroSeat) &&
+			Boolean(parseBid(call.call))
+	);
+	const action = partnerRebid
+		? heroCallAfter(context, partnerRebid.index)
+		: undefined;
+	if (!(partnerRebid && action)) {
+		return;
+	}
+
+	const call = normalizeCall(action.call);
+	if (call === "PASS") {
+		return indeterminate(rule, "RESPONDER_REBID_FORCING_STATUS_NOT_OBJECTIVE", {
+			actionIndex: action.index,
+			partnerRebid: normalizeCall(partnerRebid.call),
+		});
+	}
+	const bid = parseBid(call);
+	if (!bid) {
+		return;
+	}
+
+	const partnerRebidBid = parseBid(partnerRebid.call);
+	const isSpecificConvention =
+		call === "4NT" ||
+		call === "5NT" ||
+		(call === "4C" && partnerRebidBid?.strain === "NT");
+	if (isSpecificConvention) {
+		return notApplicable(rule, "MORE_SPECIFIC_CONVENTION_APPLIES");
+	}
+
+	const responseBid = parseBid(response.call);
+	const priorPartnershipSuits = new Set(
+		context.calls
+			.filter(
+				(prior) =>
+					prior.index < action.index &&
+					samePartnership(prior.seat, context.heroSeat)
+			)
+			.map((prior) => parseBid(prior.call)?.strain)
+			.filter((strain): strain is "C" | "D" | "H" | "S" =>
+				Boolean(strain && strain !== "NT")
+			)
+	);
+	const settings = context.system.settings.responseRebid;
+	let minimumLength = 0;
+	let suitRole: "NOTRUMP" | "OWN_SUIT" | "SUPPORT" | "NEW_SUIT" = "NOTRUMP";
+	if (bid.strain !== "NT") {
+		if (responseBid?.strain === bid.strain) {
+			suitRole = "OWN_SUIT";
+			minimumLength = naturalResponseMinLength(bid);
+		} else if (priorPartnershipSuits.has(bid.strain)) {
+			suitRole = "SUPPORT";
+			minimumLength = 3;
+		} else {
+			suitRole = "NEW_SUIT";
+			minimumLength = settings.responderRebidNewSuitMinLength;
+		}
+	}
+	const length = bidSuitLength(context, bid);
+	const shapeValid =
+		bid.strain === "NT" ? isBalanced(context.hand) : length >= minimumLength;
+	const facts = {
+		call,
+		hcp: context.points,
+		length,
+		minimumLength,
+		partnerRebid: normalizeCall(partnerRebid.call),
+		role: "RESPONDER_REBID",
+		suitRole,
+	};
+	return context.points >= settings.responderRebidMinHcp && shapeValid
+		? complied(rule, "NATURAL_RESPONDER_REBID_COMPLIED", facts, action)
+		: wrong(rule, "NATURAL_RESPONDER_REBID_OUTSIDE_AGREEMENT", facts, action);
+}
+
 function evaluateNaturalResponse(
 	rule: RuleDefinition,
 	context: EvaluationContext
 ) {
+	const responderRebid = evaluateNaturalResponderRebid(rule, context);
+	if (responderRebid) {
+		return responderRebid;
+	}
 	const response = responseContext(context);
 	if (!(response?.action && response.openingBid)) {
 		return evaluateNaturalOpenerRebid(rule, context) ?? notApplicable(rule);

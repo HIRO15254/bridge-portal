@@ -30,10 +30,107 @@ interface DdsResponse {
 	solverVersion: string;
 }
 
+interface ReplayAction {
+	actionIndex: number;
+	card: string;
+	id: string;
+	seat: (typeof order)[number];
+	trickNumber: number;
+}
+
 function getAuctionIndent(
 	calls: Array<{ seat: (typeof auctionOrder)[number] }>
 ): number {
 	return calls[0] ? auctionOrder.indexOf(calls[0].seat) : 0;
+}
+
+function PlayReplay({
+	actions,
+	heroSeat,
+}: {
+	actions: ReplayAction[];
+	heroSeat?: (typeof order)[number] | null;
+}) {
+	const [cursor, setCursor] = useState(0);
+	if (actions.length === 0) {
+		return <p className="play-empty">Playデータなし</p>;
+	}
+	const visible = actions.slice(0, cursor);
+	const currentTrick =
+		visible.at(-1)?.trickNumber ?? actions[0]?.trickNumber ?? 1;
+	const currentTrickActions = visible.filter(
+		(action) => action.trickNumber === currentTrick
+	);
+	const nextAction = actions[cursor];
+	return (
+		<div className="play-replay">
+			<div aria-live="polite" className="replay-state">
+				<strong>Trick {currentTrick}</strong>
+				<span>
+					{cursor} / {actions.length} cards
+				</span>
+				<span>{nextAction ? `次: ${nextAction.seat} の手番` : "Play終了"}</span>
+			</div>
+			<div className="trick-grid">
+				{order.map((seat) => (
+					<div className={seat === heroSeat ? "hero-action" : ""} key={seat}>
+						<small>{seat}</small>
+						<strong>
+							{currentTrickActions.find((action) => action.seat === seat)
+								?.card ?? "—"}
+						</strong>
+					</div>
+				))}
+			</div>
+			<div className="replay-controls">
+				<button
+					className="secondary"
+					disabled={cursor === 0}
+					onClick={() => setCursor(0)}
+					type="button"
+				>
+					最初
+				</button>
+				<button
+					className="secondary"
+					disabled={cursor === 0}
+					onClick={() => setCursor((value) => Math.max(0, value - 1))}
+					type="button"
+				>
+					戻る
+				</button>
+				<button
+					className="secondary"
+					disabled={cursor === actions.length}
+					onClick={() =>
+						setCursor((value) => Math.min(actions.length, value + 1))
+					}
+					type="button"
+				>
+					進む
+				</button>
+				<button
+					className="secondary"
+					disabled={cursor === actions.length}
+					onClick={() => setCursor(actions.length)}
+					type="button"
+				>
+					最後
+				</button>
+			</div>
+			<div className="play-strip" title="ここまでに再生したカード">
+				{visible.map((action) => (
+					<span
+						className={action.seat === heroSeat ? "hero-action" : ""}
+						key={action.id}
+						title={`Trick ${action.trickNumber} · ${action.seat}`}
+					>
+						{action.card}
+					</span>
+				))}
+			</div>
+		</div>
+	);
 }
 
 async function reevaluateBoard(
@@ -238,21 +335,7 @@ function BoardPage() {
 						))}
 					</div>
 					<h3 className="section-label">Play replay</h3>
-					<div className="play-strip">
-						{playActions.length ? (
-							playActions.map((action) => (
-								<span
-									className={action.seat === heroSeat ? "hero-action" : ""}
-									key={action.id}
-									title={`Trick ${action.trickNumber} · ${action.seat}`}
-								>
-									{action.card}
-								</span>
-							))
-						) : (
-							<p>Playデータなし</p>
-						)}
-					</div>
+					<PlayReplay actions={playActions} heroSeat={heroSeat} key={boardId} />
 				</section>
 			</div>
 			<section className="panel evaluation-panel">
@@ -297,8 +380,9 @@ function BoardPage() {
 				)}
 				<div className="evaluation-list">
 					{item?.evaluations.map((evaluation) => {
-						const verdict =
-							evaluation.override?.verdict ?? evaluation.automaticVerdict;
+						const verdict = evaluation.override
+							? "MANUALLY_OVERRIDDEN"
+							: evaluation.automaticVerdict;
 						const officialItemId =
 							evaluation.ruleVersionId.split("@")[0] ??
 							evaluation.ruleVersionId;
@@ -311,7 +395,19 @@ function BoardPage() {
 									<Link search={{ rule: officialItemId }} to="/rules">
 										<strong>{evaluation.ruleVersionId}</strong>
 									</Link>
-									<p>{evaluation.override?.reason ?? evaluation.reasonCode}</p>
+									{evaluation.override ? (
+										<p>
+											自動: {evaluation.automaticVerdict} → 訂正:{" "}
+											{evaluation.override.verdict}
+											<br />
+											{evaluation.override.reason} ·{" "}
+											{new Date(evaluation.override.createdAt).toLocaleString(
+												"ja-JP"
+											)}
+										</p>
+									) : (
+										<p>{evaluation.reasonCode}</p>
+									)}
 								</div>
 								<select
 									aria-label={`${evaluation.ruleVersionId}を手動訂正`}

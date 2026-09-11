@@ -16,34 +16,43 @@ function TournamentsPage() {
 		event.preventDefault();
 		setBusy(true);
 		setMessage("");
-		const data = new FormData(event.currentTarget);
-		const response = await fetch(
-			`${env.VITE_SERVER_URL}/api/imports/funbridge-json`,
-			{
-				method: "POST",
-				body: data,
-				credentials: "include",
+		try {
+			const data = new FormData(event.currentTarget);
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/api/imports/funbridge-json`,
+				{
+					method: "POST",
+					body: data,
+					credentials: "include",
+				}
+			);
+			const result = (await response.json()) as {
+				error?: string;
+				duplicate?: boolean;
+				warnings?: string[];
+			};
+			if (!response.ok) {
+				setMessage(`取込に失敗しました: ${result.error ?? response.status}`);
+			} else if (result.duplicate) {
+				setMessage("同じFunbridge JSONはすでに取り込み済みです。");
+			} else {
+				const warning = result.warnings?.length
+					? `（確認: ${result.warnings.join(", ")}）`
+					: "";
+				setMessage(`取込が完了しました${warning}`);
 			}
-		);
-		const result = (await response.json()) as {
-			error?: string;
-			duplicate?: boolean;
-			warnings?: string[];
-		};
-		if (!response.ok) {
-			setMessage(`取込に失敗しました: ${result.error ?? response.status}`);
-		} else if (result.duplicate) {
-			setMessage("同じFunbridge JSONはすでに取り込み済みです。");
-		} else {
-			const warning = result.warnings?.length
-				? `（確認: ${result.warnings.join(", ")}）`
-				: "";
-			setMessage(`取込が完了しました${warning}`);
+			if (response.ok) {
+				await queryClient.invalidateQueries();
+			}
+		} catch (error) {
+			setMessage(
+				`取込に失敗しました: ${
+					error instanceof Error ? error.message : "通信エラー"
+				}`
+			);
+		} finally {
+			setBusy(false);
 		}
-		if (response.ok) {
-			await queryClient.invalidateQueries();
-		}
-		setBusy(false);
 	}
 	return (
 		<main className="page">
@@ -85,7 +94,11 @@ function TournamentsPage() {
 					{busy ? "解析中…" : "取込・自動評価"}
 				</button>
 			</form>
-			{message && <p className="notice">{message}</p>}
+			{message && (
+				<p aria-live="polite" className="notice">
+					{message}
+				</p>
+			)}
 			<section className="panel table-panel">
 				<div className="panel-title">
 					<h2>保存済みトーナメント</h2>

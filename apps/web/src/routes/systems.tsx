@@ -10,31 +10,53 @@ function SystemsPage() {
 	const rules = useQuery(trpc.rules.list.queryOptions());
 	const [name, setName] = useState("");
 	const [busy, setBusy] = useState("");
+	const [message, setMessage] = useState("");
 	async function create(event: FormEvent) {
 		event.preventDefault();
 		if (!name.trim()) {
 			return;
 		}
 		setBusy("create");
-		await trpcClient.systems.create.mutate({ name });
-		setName("");
-		await queryClient.invalidateQueries();
-		setBusy("");
+		setMessage("");
+		try {
+			await trpcClient.systems.create.mutate({ name });
+			setName("");
+			await queryClient.invalidateQueries();
+			setMessage("Draftを作成しました。");
+		} catch (error) {
+			setMessage(`Draftを作成できませんでした: ${errorText(error)}`);
+		} finally {
+			setBusy("");
+		}
 	}
 	async function publish(systemId: string) {
 		setBusy(systemId);
-		await trpcClient.systems.publish.mutate({ systemId });
-		await queryClient.invalidateQueries();
-		setBusy("");
+		setMessage("");
+		try {
+			await trpcClient.systems.publish.mutate({ systemId });
+			await queryClient.invalidateQueries();
+			setMessage("変更不能な新しいSystem Versionを公開しました。");
+		} catch (error) {
+			setMessage(`公開できませんでした: ${errorText(error)}`);
+		} finally {
+			setBusy("");
+		}
 	}
 	async function saveDraft(
 		systemId: string,
 		data: Parameters<typeof trpcClient.systems.updateDraft.mutate>[0]
 	) {
 		setBusy(`${systemId}:draft`);
-		await trpcClient.systems.updateDraft.mutate(data);
-		await queryClient.invalidateQueries();
-		setBusy("");
+		setMessage("");
+		try {
+			await trpcClient.systems.updateDraft.mutate(data);
+			await queryClient.invalidateQueries();
+			setMessage("Draftを保存しました。");
+		} catch (error) {
+			setMessage(`Draftを保存できませんでした: ${errorText(error)}`);
+		} finally {
+			setBusy("");
+		}
 	}
 	return (
 		<main className="page">
@@ -55,6 +77,11 @@ function SystemsPage() {
 					新しいDraftを作る
 				</button>
 			</form>
+			{message && (
+				<p aria-live="polite" className="notice">
+					{message}
+				</p>
+			)}
 			<section className="card-grid">
 				{systems.data?.map((system) => (
 					<article className="system-card" key={system.id}>
@@ -101,6 +128,10 @@ function SystemsPage() {
 			)}
 		</main>
 	);
+}
+
+function errorText(error: unknown): string {
+	return error instanceof Error ? error.message : "不明なエラー";
 }
 
 type Draft = NonNullable<

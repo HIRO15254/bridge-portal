@@ -95,6 +95,55 @@ describe("priority evaluator boundaries", () => {
 		).toBe("COMPLIED");
 	});
 
+	it("evaluates the responder's natural rebid with its typed agreement", () => {
+		const auction: [Seat, string][] = [
+			["S", "1C"],
+			["W", "PASS"],
+			["N", "1H"],
+			["E", "PASS"],
+			["S", "1NT"],
+			["W", "PASS"],
+			["N", "2S"],
+		];
+		const complied = evaluateOfficialItem(
+			"A-RR-01",
+			input("KQ32.AJ32.432.32", auction)
+		);
+		const wrong = evaluateOfficialItem(
+			"A-RR-01",
+			input("KQ3.AJ432.432.32", auction)
+		);
+
+		expect(complied.automaticVerdict).toBe("COMPLIED");
+		expect(complied.reasonCode).toBe("NATURAL_RESPONDER_REBID_COMPLIED");
+		expect(complied.facts).toMatchObject({
+			minimumLength: 4,
+			role: "RESPONDER_REBID",
+			suitRole: "NEW_SUIT",
+		});
+		expect(wrong.automaticVerdict).toBe("DEVIATED_WRONG_APPLICATION");
+	});
+
+	it("does not guess whether a responder's pass over a rebid is forcing", () => {
+		const verdict = evaluateOfficialItem(
+			"A-RR-01",
+			input("KQ32.AJ32.432.32", [
+				["S", "1C"],
+				["W", "PASS"],
+				["N", "1H"],
+				["E", "PASS"],
+				["S", "1NT"],
+				["W", "PASS"],
+				["N", "PASS"],
+			])
+		);
+
+		expect(verdict.automaticVerdict).toBe("INDETERMINATE");
+		expect(verdict.reasonCode).toBe(
+			"RESPONDER_REBID_FORCING_STATUS_NOT_OBJECTIVE"
+		);
+	});
+
 	it("requires 2NT or higher before the hero has passed", () => {
 		const hand = "32.32.KQJ9.AQJT9";
 		expect(
