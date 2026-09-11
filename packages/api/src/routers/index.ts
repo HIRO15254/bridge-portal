@@ -217,12 +217,13 @@ const rulesRouter = router({
 			if (!rule) {
 				return [];
 			}
+			const effectiveVerdict = sql<string>`coalesce(${ruleEvaluationOverride.verdict}, ${ruleEvaluation.automaticVerdict})`;
 			return ctx.db
 				.select({
 					boardId: boardAttempt.id,
 					boardNumber: boardAttempt.boardNumber,
 					tournamentName: tournament.name,
-					verdict: ruleEvaluation.automaticVerdict,
+					verdict: effectiveVerdict,
 				})
 				.from(ruleEvaluation)
 				.innerJoin(
@@ -241,10 +242,19 @@ const rulesRouter = router({
 					tournament,
 					eq(tournament.id, tournamentRevision.tournamentId)
 				)
+				.leftJoin(
+					ruleEvaluationOverride,
+					eq(ruleEvaluationOverride.ruleEvaluationId, ruleEvaluation.id)
+				)
 				.where(
 					and(
 						eq(ruleEvaluation.ruleVersionId, rule.versionId),
-						eq(tournament.userId, ctx.session.user.id)
+						eq(tournament.userId, ctx.session.user.id),
+						sql`${evaluationRun.id} = (
+							select latest.id from evaluation_run as latest
+							where latest.board_attempt_id = ${boardAttempt.id}
+							order by latest.completed_at desc, latest.rowid desc limit 1
+						)`
 					)
 				)
 				.orderBy(desc(evaluationRun.completedAt))
