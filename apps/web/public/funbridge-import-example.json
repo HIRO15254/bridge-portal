@@ -38,6 +38,12 @@
         { "index": 3, "seat": "W", "call": "PASS" },
         { "index": 4, "seat": "N", "call": "PASS" },
         { "index": 5, "seat": "E", "call": "PASS" }
+      ],
+      "play": [
+        { "index": 0, "trickNumber": 1, "seat": "E", "card": "S9" },
+        { "index": 1, "trickNumber": 1, "seat": "S", "card": "ST" },
+        { "index": 2, "trickNumber": 1, "seat": "W", "card": "S2" },
+        { "index": 3, "trickNumber": 1, "seat": "N", "card": "SA" }
       ]
     }
   ]
