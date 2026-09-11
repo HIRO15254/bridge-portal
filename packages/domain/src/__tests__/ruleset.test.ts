@@ -8,7 +8,17 @@ import {
 
 const HTTPS_URL = /^https:/;
 const EXPECTED_VARIANTS = {
-	"A-OB-01": ["1-level natural", "Natural 1NT", "Weak Two", "Rule of 10"],
+	"A-OB-01": [
+		"1-level natural",
+		"Natural 1NT",
+		"Natural 2NT",
+		"Natural 3NT",
+		"Natural Strong Two",
+		"Weak Two",
+		"Natural 3-level",
+		"Natural 4+-level",
+		"Rule of 10",
+	],
 	"A-OB-02": ["20+ HCP", "17+ HCP loser definition", "14+ HCP and 5+ controls"],
 	"A-RR-01": ["Response", "Opener rebid", "Responder rebid"],
 	"A-RR-02": ["Stayman"],

@@ -280,6 +280,28 @@ function validateSettingsRanges(
 			message: "1NTの下限が上限を超えています。",
 		});
 	}
+	for (const [label, minimum, maximum] of [
+		["2NT", settings.opening.twoNtMinHcp, settings.opening.twoNtMaxHcp],
+		["3NT", settings.opening.threeNtMinHcp, settings.opening.threeNtMaxHcp],
+		[
+			"3-level",
+			settings.opening.threeLevelMinHcp,
+			settings.opening.threeLevelMaxHcp,
+		],
+		[
+			"4+-level",
+			settings.opening.fourPlusLevelMinHcp,
+			settings.opening.fourPlusLevelMaxHcp,
+		],
+	] as const) {
+		if (minimum > maximum) {
+			issues.push({
+				code: "INVALID_RANGE",
+				message: `${label} Openingの下限が上限を超えています。`,
+				officialItemId: "A-OB-01",
+			});
+		}
+	}
 	if (settings.opening.weakTwoMinHcp > settings.opening.weakTwoMaxHcp) {
 		issues.push({
 			code: "INVALID_RANGE",
@@ -405,9 +427,21 @@ function validateVariantDependencies(
 	};
 
 	requireVariant("A-OB-01", "Rule of 10", "A-OB-01", "Weak Two");
+	requireVariant("A-RR-02", "Stayman", "A-OB-01", "Natural 1NT");
+	requireVariant("A-RR-03", "Artificial 2D response", "A-OB-02");
+	requireVariant(
+		"A-RR-04",
+		"Weak 2NT response",
+		"A-OB-01",
+		"Natural Strong Two"
+	);
+	for (const variant of ["Feature ask", "Ogust-style ask"]) {
+		requireVariant("A-RR-05", variant, "A-OB-01", "Weak Two");
+	}
 	for (const variant of ["5NT king ask", "DOPI", "DEPO", "ROPI"]) {
 		requireVariant("A-RR-06", variant, "A-RR-06", "Blackwood");
 	}
+	requireVariant("A-RR-07", "4C ace ask", "A-OB-01", "Natural 1NT");
 	requireVariant("A-RR-07", "5C king ask", "A-RR-07", "4C ace ask");
 	requireVariant("A-RR-09", "Stayman eligibility", "A-RR-02");
 	requireVariant("A-RR-09", "Gerber eligibility", "A-RR-07");

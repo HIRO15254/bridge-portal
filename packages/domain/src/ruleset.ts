@@ -29,7 +29,7 @@ export interface RuleDefinition {
 
 const applicabilityById: Readonly<Record<string, string>> = {
 	"A-OB-01":
-		"オープンする番で、それ以前にパス以外のCallがなく、ハンドをナチュラルに表現するとき。Natural NTは通常のバランス形に加え、A・K・Qいずれかのシングルトンを持ち他の3スーツが各4枚の形も選択できる。Weak TwoではHCPとビッドスーツ枚数の合計も確認する。",
+		"オープンする番で、それ以前にパス以外のCallがなく、1-levelから4-level以上までハンドをナチュラルに表現するとき。Natural NTは通常のバランス形に加え、A・K・Qいずれかのシングルトンを持ち他の3スーツが各4枚の形も選択できる。Weak TwoではHCPとビッドスーツ枚数の合計も確認する。",
 	"A-OB-02":
 		"オープンする番で、20HCP以上、17HCP以上かつメジャー4ルーザー以下／マイナー3ルーザー以下、または14HCP以上・5コントロール以上かつ同じルーザー条件のうち、採用した定義を満たすハンドを2♣で示すとき。",
 	"A-RR-01":
@@ -107,10 +107,20 @@ export const JCBL_LIST_A_2026_05_01 = Object.freeze([
 		"A-OB-01",
 		"OPENING_BIDS",
 		"ナチュラル・オープン",
-		"ウィーク2を含むナチュラルなオープン。Natural NTでは通常のバランス形とシングルトン・トップオナーを持つ4-4-4-1を扱い、ウィーク2はRule of 10を満たす。",
-		"Systemで許可していれば、♠Aのシングルトンを持つ4-4-4-1は設定レンジ内でNatural 1NTの候補になる。6HCPで6枚スペードなら合計12なので2♠の候補になる。",
-		["1-level natural", "Natural 1NT", "Weak Two", "Rule of 10"],
-		["HCP range", "Suit length", "NT shape / singleton top honor"],
+		"1-level、Natural NT、Natural Strong Two、Weak Two、3-level以上を含むナチュラルなオープン。Natural NTは設定された形、Weak TwoはRule of 10も確認する。",
+		"1♠、2NT、Natural 2♥、3♦、4♠はいずれも、採用したlevel別のHCP・形・スーツ長に照らして判断する。",
+		[
+			"1-level natural",
+			"Natural 1NT",
+			"Natural 2NT",
+			"Natural 3NT",
+			"Natural Strong Two",
+			"Weak Two",
+			"Natural 3-level",
+			"Natural 4+-level",
+			"Rule of 10",
+		],
+		["Level別HCP range", "Suit length", "Natural NT shape"],
 		"CONTEXTUAL"
 	),
 	rule(

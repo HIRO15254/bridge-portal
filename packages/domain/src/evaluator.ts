@@ -320,43 +320,20 @@ function isJumpShift(openingBid: Bid, responseBid: Bid): boolean {
 function naturalOpeningCandidate(
 	context: EvaluationContext
 ): string | undefined {
-	const { opening } = context.system.settings;
 	if (
-		hasVariant(context, "A-OB-01", "Natural 1NT") &&
-		context.points >= opening.oneNtMinHcp &&
-		context.points <= opening.oneNtMaxHcp &&
-		isBalanced(context.hand, opening.allowSingletonTopHonor)
-	) {
-		return "1NT";
-	}
-	if (
-		hasVariant(context, "A-OB-01", "Weak Two") &&
-		context.points >= opening.weakTwoMinHcp &&
-		context.points <= opening.weakTwoMaxHcp
-	) {
-		for (const suit of ["S", "H", "D"] as const) {
-			const length = context.lengths[suit];
-			const ruleOfTenMet =
-				!hasVariant(context, "A-OB-01", "Rule of 10") ||
-				context.points + length >= 10;
-			if (length >= 5 && ruleOfTenMet) {
-				return `2${suit}`;
-			}
-		}
-	}
-	if (
-		!hasVariant(context, "A-OB-01", "1-level natural") ||
-		context.points < opening.oneLevelMinHcp
+		context.system.adoptedOfficialItemIds.includes("A-OB-02") &&
+		strongTwoClubEligible(context)
 	) {
 		return;
 	}
-	for (const suit of ["S", "H", "D", "C"] as const) {
-		const minimum = naturalOpeningMinLength(context, suit);
-		if (context.lengths[suit] >= minimum) {
-			return `1${suit}`;
-		}
-	}
-	return;
+	const suitCalls = [4, 3, 2, 1].flatMap((level) =>
+		(["S", "H", "D", "C"] as const).map((suit) => `${level}${suit}`)
+	);
+	return ["1NT", "2NT", "3NT", ...suitCalls].find((call) => {
+		const bid = parseBid(call);
+		const agreement = bid ? naturalOpeningAgreement(context, bid) : undefined;
+		return agreement?.adopted && agreement.valid;
+	});
 }
 
 function strongTwoClubEligible(context: EvaluationContext): boolean {
@@ -381,42 +358,142 @@ function strongTwoClubEligible(context: EvaluationContext): boolean {
 	);
 }
 
-function naturalOpeningAgreement(context: EvaluationContext, bid: Bid) {
-	const { opening } = context.system.settings;
-	if (bid.level === 1 && bid.strain === "NT") {
-		return {
-			adopted: hasVariant(context, "A-OB-01", "Natural 1NT"),
-			valid:
-				context.points >= opening.oneNtMinHcp &&
-				context.points <= opening.oneNtMaxHcp &&
-				isBalanced(context.hand, opening.allowSingletonTopHonor),
-		};
+interface NaturalOpeningAgreement {
+	adopted: boolean;
+	valid: boolean;
+}
+
+function naturalNtOpeningAgreement(
+	context: EvaluationContext,
+	bid: Bid
+): NaturalOpeningAgreement | undefined {
+	if (bid.strain !== "NT") {
+		return;
 	}
+	const { opening } = context.system.settings;
+	const profiles: Partial<
+		Record<
+			number,
+			{
+				allowSingletonTopHonor: boolean;
+				maximum: number;
+				minimum: number;
+				variant: string;
+			}
+		>
+	> = {
+		1: {
+			allowSingletonTopHonor: opening.allowSingletonTopHonor,
+			maximum: opening.oneNtMaxHcp,
+			minimum: opening.oneNtMinHcp,
+			variant: "Natural 1NT",
+		},
+		2: {
+			allowSingletonTopHonor: false,
+			maximum: opening.twoNtMaxHcp,
+			minimum: opening.twoNtMinHcp,
+			variant: "Natural 2NT",
+		},
+		3: {
+			allowSingletonTopHonor: false,
+			maximum: opening.threeNtMaxHcp,
+			minimum: opening.threeNtMinHcp,
+			variant: "Natural 3NT",
+		},
+	};
+	const profile = profiles[bid.level];
+	if (!profile) {
+		return;
+	}
+	return {
+		adopted: hasVariant(context, "A-OB-01", profile.variant),
+		valid:
+			context.points >= profile.minimum &&
+			context.points <= profile.maximum &&
+			isBalanced(context.hand, profile.allowSingletonTopHonor),
+	};
+}
+
+function naturalTwoSuitOpeningAgreement(
+	context: EvaluationContext,
+	bid: Bid
+): NaturalOpeningAgreement | undefined {
+	if (bid.level !== 2 || bid.strain === "NT") {
+		return;
+	}
+	if (
+		bid.strain === "C" &&
+		context.system.adoptedOfficialItemIds.includes("A-OB-02")
+	) {
+		return;
+	}
+	const { opening } = context.system.settings;
+	const length = bidSuitLength(context, bid);
+	const strongAdopted = hasVariant(context, "A-OB-01", "Natural Strong Two");
+	const weakAdopted = hasVariant(context, "A-OB-01", "Weak Two");
+	const ruleOfTenMet =
+		!hasVariant(context, "A-OB-01", "Rule of 10") ||
+		context.points + length >= 10;
+	return {
+		adopted: strongAdopted || weakAdopted,
+		valid:
+			(strongAdopted &&
+				context.points >= opening.naturalStrongTwoMinHcp &&
+				length >= opening.naturalStrongTwoMinLength) ||
+			(weakAdopted &&
+				context.points >= opening.weakTwoMinHcp &&
+				context.points <= opening.weakTwoMaxHcp &&
+				length >= 5 &&
+				ruleOfTenMet),
+	};
+}
+
+function naturalSuitOpeningAgreement(
+	context: EvaluationContext,
+	bid: Bid
+): NaturalOpeningAgreement | undefined {
+	if (bid.strain === "NT") {
+		return;
+	}
+	const { opening } = context.system.settings;
 	if (bid.level === 1) {
 		return {
 			adopted: hasVariant(context, "A-OB-01", "1-level natural"),
 			valid:
 				context.points >= opening.oneLevelMinHcp &&
-				bid.strain !== "NT" &&
 				bidSuitLength(context, bid) >=
 					naturalOpeningMinLength(context, bid.strain),
 		};
 	}
-	if (bid.level !== 2 || !["D", "H", "S"].includes(bid.strain)) {
-		return;
+	if (bid.level === 3) {
+		return {
+			adopted: hasVariant(context, "A-OB-01", "Natural 3-level"),
+			valid:
+				context.points >= opening.threeLevelMinHcp &&
+				context.points <= opening.threeLevelMaxHcp &&
+				bidSuitLength(context, bid) >= opening.threeLevelMinLength,
+		};
 	}
-	const length = bidSuitLength(context, bid);
-	const ruleOfTenMet =
-		!hasVariant(context, "A-OB-01", "Rule of 10") ||
-		context.points + length >= 10;
-	return {
-		adopted: hasVariant(context, "A-OB-01", "Weak Two"),
-		valid:
-			context.points >= opening.weakTwoMinHcp &&
-			context.points <= opening.weakTwoMaxHcp &&
-			length >= 5 &&
-			ruleOfTenMet,
-	};
+	return bid.level >= 4
+		? {
+				adopted: hasVariant(context, "A-OB-01", "Natural 4+-level"),
+				valid:
+					context.points >= opening.fourPlusLevelMinHcp &&
+					context.points <= opening.fourPlusLevelMaxHcp &&
+					bidSuitLength(context, bid) >= opening.fourPlusLevelMinLength,
+			}
+		: undefined;
+}
+
+function naturalOpeningAgreement(
+	context: EvaluationContext,
+	bid: Bid
+): NaturalOpeningAgreement | undefined {
+	return (
+		naturalNtOpeningAgreement(context, bid) ??
+		naturalTwoSuitOpeningAgreement(context, bid) ??
+		naturalSuitOpeningAgreement(context, bid)
+	);
 }
 
 function evaluateNaturalOpening(
@@ -435,7 +512,12 @@ function evaluateNaturalOpening(
 			? missed(rule, "NATURAL_OPENING_MISSED", { expected: candidate }, action)
 			: notApplicable(rule);
 	}
-	if (!bid || (bid.level === 2 && bid.strain === "C")) {
+	if (
+		!bid ||
+		(bid.level === 2 &&
+			bid.strain === "C" &&
+			context.system.adoptedOfficialItemIds.includes("A-OB-02"))
+	) {
 		return notApplicable(rule);
 	}
 	const agreement = naturalOpeningAgreement(context, bid);
@@ -464,6 +546,7 @@ function evaluateStrongTwoClub(
 		return notApplicable(rule);
 	}
 	const call = normalizeCall(action.call);
+	const bid = parseBid(call);
 	const eligible = strongTwoClubEligible(context);
 	const facts = {
 		controls: controls(context.hand),
@@ -474,6 +557,12 @@ function evaluateStrongTwoClub(
 		return eligible
 			? complied(rule, "STRONG_2C_DEFINITION_MET", facts, action)
 			: wrong(rule, "STRONG_2C_DEFINITION_NOT_MET", facts, action);
+	}
+	const naturalAlternative = bid
+		? naturalOpeningAgreement(context, bid)
+		: undefined;
+	if (naturalAlternative?.adopted && naturalAlternative.valid) {
+		return notApplicable(rule, "VALID_NATURAL_OPENING_SELECTED");
 	}
 	return eligible
 		? missed(

@@ -46,8 +46,21 @@ describe("system settings", () => {
 		const { competitive: _competitive, ...legacy } = clone(
 			defaultSystemSettings
 		);
-		const { allowSingletonTopHonor: _singleton, ...legacyOpening } =
-			legacy.opening;
+		const {
+			allowSingletonTopHonor: _singleton,
+			fourPlusLevelMaxHcp: _fourPlusMax,
+			fourPlusLevelMinHcp: _fourPlusMin,
+			fourPlusLevelMinLength: _fourPlusLength,
+			naturalStrongTwoMinLength: _strongTwoLength,
+			threeLevelMaxHcp: _threeLevelMax,
+			threeLevelMinHcp: _threeLevelMin,
+			threeLevelMinLength: _threeLevelLength,
+			threeNtMaxHcp: _threeNtMax,
+			threeNtMinHcp: _threeNtMin,
+			twoNtMaxHcp: _twoNtMax,
+			twoNtMinHcp: _twoNtMin,
+			...legacyOpening
+		} = legacy.opening;
 		const { blackwoodMinHcp: _blackwood, ...legacyResponse } =
 			legacy.responseRebid;
 		const legacySettings = {
@@ -61,6 +74,9 @@ describe("system settings", () => {
 		expect(normalized.competitive.takeoutDoubleMinHcp).toBe(12);
 		expect(normalized.competitive.balancingTakeoutDoubleMinHcp).toBe(9);
 		expect(normalized.opening.allowSingletonTopHonor).toBe(false);
+		expect(normalized.opening.naturalStrongTwoMinLength).toBe(5);
+		expect(normalized.opening.threeLevelMinHcp).toBe(5);
+		expect(normalized.opening.twoNtMaxHcp).toBe(22);
 		expect(normalized.responseRebid.blackwoodMinHcp).toBe(16);
 		expect(normalized.responseRebid.weakTwoFeatureMinimumHonor).toBe("K");
 	});
@@ -112,11 +128,17 @@ describe("system settings", () => {
 		const draft = validDraft();
 		draft.settings.opening.oneNtMinHcp = 18;
 		draft.settings.opening.oneNtMaxHcp = 15;
+		draft.settings.opening.threeLevelMinHcp = 11;
+		draft.settings.opening.threeLevelMaxHcp = 10;
 		draft.settings.signal.priority = ["ATTITUDE", "ATTITUDE", "COUNT"];
 
-		expect(validateSystemDraft(draft).map((issue) => issue.code)).toEqual(
+		const issues = validateSystemDraft(draft);
+		expect(issues.map((issue) => issue.code)).toEqual(
 			expect.arrayContaining(["INVALID_RANGE", "INVALID_SETTING"])
 		);
+		expect(
+			issues.some((issue) => issue.message.includes("3-level Opening"))
+		).toBe(true);
 	});
 
 	it("rejects overlapping weak and natural strong two ranges", () => {
@@ -132,6 +154,9 @@ describe("system settings", () => {
 	it("rejects convention continuations without their prerequisite variant", () => {
 		const draft = validDraft();
 		draft.selectedVariants["A-OB-01"] = ["Rule of 10"];
+		draft.adoptedOfficialItemIds = draft.adoptedOfficialItemIds.filter(
+			(id) => id !== "A-OB-02"
+		);
 		draft.selectedVariants["A-RR-06"] = ["5NT king ask"];
 		draft.selectedVariants["A-RR-07"] = ["5C king ask"];
 
@@ -140,7 +165,15 @@ describe("system settings", () => {
 		);
 
 		expect(issues.map((issue) => issue.officialItemId)).toEqual(
-			expect.arrayContaining(["A-OB-01", "A-RR-06", "A-RR-07"])
+			expect.arrayContaining([
+				"A-OB-01",
+				"A-RR-02",
+				"A-RR-03",
+				"A-RR-04",
+				"A-RR-05",
+				"A-RR-06",
+				"A-RR-07",
+			])
 		);
 	});
 });

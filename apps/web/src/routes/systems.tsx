@@ -200,6 +200,13 @@ function SystemEditor({
 			settings: {
 				opening: {
 					allowSingletonTopHonor: data.has("allowSingletonTopHonor"),
+					fourPlusLevelMaxHcp: numberValue(data, "fourPlusLevelMaxHcp"),
+					fourPlusLevelMinHcp: numberValue(data, "fourPlusLevelMinHcp"),
+					fourPlusLevelMinLength: numberValue(data, "fourPlusLevelMinLength"),
+					naturalStrongTwoMinLength: numberValue(
+						data,
+						"naturalStrongTwoMinLength"
+					),
 					oneLevelMinHcp: numberValue(data, "openingOneLevelMinHcp"),
 					oneClubMinLength: numberValue(data, "oneClubMinLength"),
 					oneDiamondMinLength: numberValue(data, "oneDiamondMinLength"),
@@ -207,6 +214,13 @@ function SystemEditor({
 					oneNtMinHcp: numberValue(data, "oneNtMinHcp"),
 					oneNtMaxHcp: numberValue(data, "oneNtMaxHcp"),
 					naturalStrongTwoMinHcp: numberValue(data, "naturalStrongTwoMinHcp"),
+					threeLevelMaxHcp: numberValue(data, "threeLevelMaxHcp"),
+					threeLevelMinHcp: numberValue(data, "threeLevelMinHcp"),
+					threeLevelMinLength: numberValue(data, "threeLevelMinLength"),
+					threeNtMaxHcp: numberValue(data, "threeNtMaxHcp"),
+					threeNtMinHcp: numberValue(data, "threeNtMinHcp"),
+					twoNtMaxHcp: numberValue(data, "twoNtMaxHcp"),
+					twoNtMinHcp: numberValue(data, "twoNtMinHcp"),
 					weakTwoMinHcp: numberValue(data, "weakTwoMinHcp"),
 					weakTwoMaxHcp: numberValue(data, "weakTwoMaxHcp"),
 				},
@@ -311,13 +325,60 @@ function SystemEditor({
 		],
 		["oneNtMinHcp", "1NT 下限HCP", draft.settings.opening.oneNtMinHcp],
 		["oneNtMaxHcp", "1NT 上限HCP", draft.settings.opening.oneNtMaxHcp],
+		["twoNtMinHcp", "Natural 2NT 下限HCP", draft.settings.opening.twoNtMinHcp],
+		["twoNtMaxHcp", "Natural 2NT 上限HCP", draft.settings.opening.twoNtMaxHcp],
+		[
+			"threeNtMinHcp",
+			"Natural 3NT 下限HCP",
+			draft.settings.opening.threeNtMinHcp,
+		],
+		[
+			"threeNtMaxHcp",
+			"Natural 3NT 上限HCP",
+			draft.settings.opening.threeNtMaxHcp,
+		],
 		[
 			"naturalStrongTwoMinHcp",
 			"Natural Strong Two下限",
 			draft.settings.opening.naturalStrongTwoMinHcp,
 		],
+		[
+			"naturalStrongTwoMinLength",
+			"Natural Strong Two最小枚数",
+			draft.settings.opening.naturalStrongTwoMinLength,
+		],
 		["weakTwoMinHcp", "Weak Two 下限", draft.settings.opening.weakTwoMinHcp],
 		["weakTwoMaxHcp", "Weak Two 上限", draft.settings.opening.weakTwoMaxHcp],
+		[
+			"threeLevelMinHcp",
+			"3-level Opening 下限HCP",
+			draft.settings.opening.threeLevelMinHcp,
+		],
+		[
+			"threeLevelMaxHcp",
+			"3-level Opening 上限HCP",
+			draft.settings.opening.threeLevelMaxHcp,
+		],
+		[
+			"threeLevelMinLength",
+			"3-level Opening 最小枚数",
+			draft.settings.opening.threeLevelMinLength,
+		],
+		[
+			"fourPlusLevelMinHcp",
+			"4+-level Opening 下限HCP",
+			draft.settings.opening.fourPlusLevelMinHcp,
+		],
+		[
+			"fourPlusLevelMaxHcp",
+			"4+-level Opening 上限HCP",
+			draft.settings.opening.fourPlusLevelMaxHcp,
+		],
+		[
+			"fourPlusLevelMinLength",
+			"4+-level Opening 最小枚数",
+			draft.settings.opening.fourPlusLevelMinLength,
+		],
 		[
 			"minimumResponseHcp",
 			"Response 下限",
