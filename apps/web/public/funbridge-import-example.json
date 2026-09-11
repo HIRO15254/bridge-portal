@@ -1,0 +1,44 @@
+{
+  "format": "FUNBRIDGE_EXPORT",
+  "formatVersion": 1,
+  "tournament": {
+    "id": "daily-example-2026-09-12",
+    "family": "DAILY",
+    "name": "Daily example",
+    "funbridgeId": "replace-with-your-funbridge-id",
+    "playedAt": "2026-09-12T12:00:00+09:00",
+    "completion": "COMPLETED",
+    "boardCount": 1,
+    "scoreType": "MP",
+    "score": 52.4,
+    "rank": 10,
+    "participantCount": 100,
+    "daily": { "region": "JAPAN" }
+  },
+  "boards": [
+    {
+      "boardNumber": 1,
+      "dealer": "N",
+      "vulnerability": "None",
+      "hands": {
+        "N": "AKQJ.AT98.32.432",
+        "E": "9876.7654.AK.QJ5",
+        "S": "T543.KQJ2.QJ.T98",
+        "W": "2.3.T987654.AK76"
+      },
+      "heroSeat": "N",
+      "contract": "4S",
+      "declarer": "N",
+      "result": 0,
+      "score": 61.4,
+      "auction": [
+        { "index": 0, "seat": "N", "call": "1S" },
+        { "index": 1, "seat": "E", "call": "PASS" },
+        { "index": 2, "seat": "S", "call": "4S" },
+        { "index": 3, "seat": "W", "call": "PASS" },
+        { "index": 4, "seat": "N", "call": "PASS" },
+        { "index": 5, "seat": "E", "call": "PASS" }
+      ]
+    }
+  ]
+}

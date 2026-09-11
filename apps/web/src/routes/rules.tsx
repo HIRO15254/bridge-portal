@@ -18,6 +18,7 @@ const labels: Record<string, string> = {
 
 function RulesPage() {
 	const rules = useQuery(trpc.rules.list.queryOptions());
+	const manifest = useQuery(trpc.rules.manifest.queryOptions());
 	const search = Route.useSearch();
 	const [query, setQuery] = useState("");
 	const [selected, setSelected] = useState<string | undefined>(search.rule);
@@ -30,7 +31,7 @@ function RulesPage() {
 	const items = useMemo(
 		() =>
 			(rules.data ?? []).filter((rule) =>
-				`${rule.title}${rule.summary}${rule.variants.join(" ")}`
+				`${rule.title}${rule.summary}${rule.applicability}${rule.variants.join(" ")}`
 					.toLowerCase()
 					.includes(query.toLowerCase())
 			),
@@ -54,6 +55,22 @@ function RulesPage() {
 			</div>
 			<div className="rules-layout">
 				<section className="rule-list">
+					<article className="panel">
+						<h2>定義とFull Disclosure</h2>
+						<p>{manifest.data?.fullDisclosure}</p>
+						{manifest.data && (
+							<ul>
+								{Object.entries(manifest.data.glossary).map(
+									([term, definition]) => (
+										<li key={term}>
+											<strong>{term}:</strong> {definition}
+										</li>
+									)
+								)}
+							</ul>
+						)}
+						<small>{manifest.data?.alertPolicy}</small>
+					</article>
 					{Object.entries(labels).map(([category, label]) => (
 						<div key={category}>
 							<h2>{label}</h2>
@@ -92,7 +109,9 @@ function RulesPage() {
 								Alert: {detail.alert}
 							</span>
 							<p>{detail.summary}</p>
-							<h3>適用例</h3>
+							<h3>適用条件</h3>
+							<p>{detail.applicability}</p>
+							<h3>{detail.exampleKind === "PLAY" ? "Play例" : "Auction例"}</h3>
 							<p>{detail.example}</p>
 							<h3>Variants</h3>
 							<div className="tag-list">
@@ -125,7 +144,7 @@ function RulesPage() {
 								)}
 							</div>
 							<a href={detail.officialUrl} rel="noreferrer" target="_blank">
-								公式資料を確認 ↗
+								公式資料（施行日 {detail.effectiveDate}）を確認 ↗
 							</a>
 						</>
 					) : (

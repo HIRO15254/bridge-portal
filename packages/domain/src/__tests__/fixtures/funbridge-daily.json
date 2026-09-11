@@ -1,0 +1,44 @@
+{
+  "format": "FUNBRIDGE_EXPORT",
+  "formatVersion": 1,
+  "tournament": {
+    "id": "daily-japan-2026-09-02",
+    "family": "DAILY",
+    "name": "Daily Japan IMP",
+    "funbridgeId": "hero-123",
+    "playedAt": "2026-09-02T20:15:00+09:00",
+    "completion": "COMPLETED",
+    "boardCount": 1,
+    "scoreType": "IMP",
+    "score": 12.7,
+    "rank": 8,
+    "participantCount": 240,
+    "daily": { "region": "JAPAN" }
+  },
+  "boards": [
+    {
+      "boardNumber": 3,
+      "dealer": "S",
+      "vulnerability": "EW",
+      "hands": {
+        "N": "AKQJ.AT98.32.432",
+        "E": "9876.7654.AK.QJ5",
+        "S": "T543.KQJ2.QJ.T98",
+        "W": "2.3.T987654.AK76"
+      },
+      "heroSeat": "S",
+      "contract": "3NT",
+      "declarer": "S",
+      "result": 1,
+      "score": 1.4,
+      "auction": [
+        { "index": 0, "seat": "S", "call": "1NT" },
+        { "index": 1, "seat": "W", "call": "PASS" },
+        { "index": 2, "seat": "N", "call": "3NT" },
+        { "index": 3, "seat": "E", "call": "PASS" },
+        { "index": 4, "seat": "S", "call": "PASS" },
+        { "index": 5, "seat": "W", "call": "PASS" }
+      ]
+    }
+  ]
+}

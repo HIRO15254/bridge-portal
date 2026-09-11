@@ -1,0 +1,49 @@
+{
+  "format": "FUNBRIDGE_EXPORT",
+  "formatVersion": 1,
+  "tournament": {
+    "id": "bp-circuit-2026-09-01",
+    "family": "BP_CIRCUIT",
+    "name": "BP Circuit September",
+    "funbridgeId": "hero-123",
+    "playedAt": "2026-09-01T12:00:00+09:00",
+    "completion": "COMPLETED",
+    "boardCount": 1,
+    "scoreType": "MP",
+    "score": 54.3,
+    "rank": 12,
+    "participantCount": 380,
+    "bpCircuit": {
+      "level": "100",
+      "multiplier": 2,
+      "awarded": 18,
+      "eventType": "MONTHLY"
+    }
+  },
+  "boards": [
+    {
+      "boardNumber": 1,
+      "dealer": "N",
+      "vulnerability": "None",
+      "hands": {
+        "N": "AKQJ.AT98.32.432",
+        "E": "9876.7654.AK.QJ5",
+        "S": "T543.KQJ2.QJ.T98",
+        "W": "2.3.T987654.AK76"
+      },
+      "heroSeat": "N",
+      "contract": "4S",
+      "declarer": "N",
+      "result": 0,
+      "score": 61.4,
+      "auction": [
+        { "index": 0, "seat": "N", "call": "1S" },
+        { "index": 1, "seat": "E", "call": "PASS" },
+        { "index": 2, "seat": "S", "call": "4S" },
+        { "index": 3, "seat": "W", "call": "PASS" },
+        { "index": 4, "seat": "N", "call": "PASS" },
+        { "index": 5, "seat": "E", "call": "PASS" }
+      ]
+    }
+  ]
+}

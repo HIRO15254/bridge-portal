@@ -11,22 +11,71 @@ export type RuleCategory =
 export type AlertRequirement = "REQUIRED" | "NOT_REQUIRED" | "CONTEXTUAL";
 
 export interface RuleDefinition {
-	alert: AlertRequirement;
-	category: RuleCategory;
-	configuration: string[];
-	effectiveDate: typeof JCBL_RULESET_EFFECTIVE_DATE;
-	evaluatorId: string;
-	example: string;
-	officialItemId: string;
-	officialUrl: string;
-	summary: string;
-	title: string;
-	variants: string[];
-	versionId: string;
+	readonly alert: AlertRequirement;
+	readonly applicability: string;
+	readonly category: RuleCategory;
+	readonly configuration: readonly string[];
+	readonly effectiveDate: typeof JCBL_RULESET_EFFECTIVE_DATE;
+	readonly evaluatorId: string;
+	readonly example: string;
+	readonly exampleKind: "AUCTION" | "PLAY";
+	readonly officialItemId: string;
+	readonly officialUrl: string;
+	readonly summary: string;
+	readonly title: string;
+	readonly variants: readonly string[];
+	readonly versionId: string;
 }
 
-function rule(
-	officialItemId: string,
+const applicabilityById: Readonly<Record<string, string>> = {
+	"A-OB-01":
+		"オープンする番で、それ以前にパス以外のCallがなく、ハンドをナチュラルに表現するとき。Weak TwoではHCPと最長スーツ枚数の合計も確認する。",
+	"A-OB-02":
+		"オープンする番で、採用した3定義のいずれかを満たすゲームフォース級のハンドを2♣で示すとき。",
+	"A-RR-01":
+		"パートナーのナチュラルCallへ応答するとき、またはオープナー／レスポンダーが自然なスーツやNTを再提示するとき。",
+	"A-RR-02":
+		"適格なNatural 1NTオープンに対し、4枚メジャーの有無を問い合わせるレスポンダーの番。",
+	"A-RR-03":
+		"パートナーがStrong Artificial Forcing 2♣をオープンし、2♦を人工的なレスポンスとして採用しているとき。",
+	"A-RR-04":
+		"パートナーのNatural Strong Twoオープンに対し、設定上の弱いハンドを持つレスポンダーの番。",
+	"A-RR-05":
+		"パートナーのWeak Twoオープンに対し、ゲーム判断のために強さ・Feature・スーツ品質を問い合わせるとき。",
+	"A-RR-06":
+		"トランプ合意後にAまたはKの枚数を尋ねる局面と、そのaskへ相手が介入した局面。",
+	"A-RR-07":
+		"Natural NTを起点とし、4♣／5♣でA／Kの枚数を問い合わせる合意を使う局面。",
+	"A-RR-08":
+		"トランプ合意後、グランドスラム判断のため5NTでトランプのトップアナーを問い合わせる局面。",
+	"A-RR-09":
+		"StaymanまたはGerberを組み込むNatural 1NTのSystem rangeを設定・評価するとき。",
+	"A-RR-10":
+		"パートナーのスーツを支持し、自分の実スーツも示すジャンプシフトをレスポンスとして選ぶ局面。",
+	"A-CD-01":
+		"相手のオープン後、自分の実スーツと設定強度を直接示して競争参加するとき。",
+	"A-CD-02":
+		"相手のオープン後、未ビッドの特定2スーツを5-4以上で同時に示すNTオーバーコールを使うとき。",
+	"A-CD-03":
+		"相手のスーツオープン後、そのスーツが短く他スーツへ対応できるハンドでDoubleするとき。",
+	"A-CD-04":
+		"相手がスラムへ到達し、通常でないオープニングリードをパートナーへ要求できるとき。",
+	"A-CD-05":
+		"パートナーのオープンに相手がオーバーコールし、未ビッドスーツを示すためDoubleするとき。",
+	"A-CD-06":
+		"味方の低いコントラクトがペナルティDoubleされ、別のスーツへ逃げるようRedoubleで要求するとき。",
+	"A-CD-07":
+		"相手が示したスーツをCue Bidし、ゲームフォース以上の強さを表すとき。",
+	"A-CD-08":
+		"パートナーのオーバーコール後、相手スーツのCue Bidで支持とInvitation以上を示すとき。",
+	"A-CA-01":
+		"本人がディフェンスの最初のTrickへリードし、採用したHonor／AK／small-card方式を客観的に適用できるとき。",
+	"A-CA-02":
+		"本人がディフェンスでFollowし、Attitude・Count・Suit Preferenceのどれを示す局面か客観的に確定できるとき。",
+};
+
+function rule<const ItemId extends string>(
+	officialItemId: ItemId,
 	category: RuleCategory,
 	title: string,
 	summary: string,
@@ -34,24 +83,26 @@ function rule(
 	variants: string[],
 	configuration: string[],
 	alert: AlertRequirement = "CONTEXTUAL"
-): RuleDefinition {
-	return {
+): RuleDefinition & { readonly officialItemId: ItemId } {
+	return Object.freeze({
 		alert,
+		applicability: applicabilityById[officialItemId] ?? summary,
 		category,
-		configuration,
+		configuration: Object.freeze(configuration),
 		effectiveDate: JCBL_RULESET_EFFECTIVE_DATE,
 		evaluatorId: `eval-${officialItemId.toLowerCase()}`,
 		example,
+		exampleKind: category === "CARDING" ? "PLAY" : "AUCTION",
 		officialItemId,
 		officialUrl: JCBL_OFFICIAL_URL,
 		summary,
 		title,
-		variants,
+		variants: Object.freeze(variants),
 		versionId: `${officialItemId}@2026-05-01`,
-	};
+	});
 }
 
-export const JCBL_LIST_A_2026_05_01 = [
+export const JCBL_LIST_A_2026_05_01 = Object.freeze([
 	rule(
 		"A-OB-01",
 		"OPENING_BIDS",
@@ -275,27 +326,27 @@ export const JCBL_LIST_A_2026_05_01 = [
 		["Signal priority"],
 		"NOT_REQUIRED"
 	),
-] as const satisfies readonly RuleDefinition[];
+] as const satisfies readonly RuleDefinition[]);
 
-export const JCBL_RULESET_MANIFEST = {
+export const JCBL_RULESET_MANIFEST = Object.freeze({
 	id: JCBL_RULESET_VERSION,
 	effectiveDate: JCBL_RULESET_EFFECTIVE_DATE,
 	officialUrl: JCBL_OFFICIAL_URL,
 	immutable: true,
 	itemCount: 22,
 	items: JCBL_LIST_A_2026_05_01,
-	glossary: {
+	glossary: Object.freeze({
 		Natural: "実際に示すスーツ、NTの形、または一般的な強さを直接表すCall。",
 		Treatment: "ナチュラルなCallに付随して意味や継続方法を定める取り決め。",
 		Convention: "ナチュラルな意味とは異なる情報を体系的に交換する取り決め。",
 		CueBid:
 			"相手が示したスーツを競ることで、別の強さ・支持・コントロールを表すCall。",
-	},
+	}),
 	fullDisclosure:
 		"採用した意味、レンジ、例外、継続を相手に正確に説明できる状態を保つ。",
 	alertPolicy:
 		"各RuleDefinitionのalertはリストA固有の教材メタデータであり、競技会固有の手順説明は対象外。",
-} as const;
+} as const);
 
 export type OfficialItemId =
 	(typeof JCBL_LIST_A_2026_05_01)[number]["officialItemId"];

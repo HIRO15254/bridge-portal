@@ -1,0 +1,37 @@
+{
+  "format": "FUNBRIDGE_EXPORT",
+  "formatVersion": 1,
+  "tournament": {
+    "id": "series-elite-2026-09",
+    "family": "SERIES",
+    "name": "Series Elite September",
+    "funbridgeId": "hero-123",
+    "playedAt": "2026-09-03T08:30:00+09:00",
+    "completion": "IN_PROGRESS",
+    "boardCount": 2,
+    "scoreType": "MP",
+    "score": 49.8,
+    "rank": 45,
+    "participantCount": 500,
+    "series": {
+      "level": "ELITE",
+      "period": "2026-09",
+      "outcome": "PENDING"
+    }
+  },
+  "boards": [
+    {
+      "boardNumber": 7,
+      "dealer": "W",
+      "vulnerability": "Both",
+      "hands": {
+        "N": "AKQJ.AT98.32.432",
+        "E": "9876.7654.AK.QJ5",
+        "S": "T543.KQJ2.QJ.T98",
+        "W": "2.3.T987654.AK76"
+      },
+      "heroSeat": "E",
+      "score": -4.2
+    }
+  ]
+}

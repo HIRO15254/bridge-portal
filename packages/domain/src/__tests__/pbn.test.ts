@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { exportPbn, parsePbn } from "../pbn";
+import {
+	contractResultToTricks,
+	createDoubleDummyPbnTags,
+	exportPbn,
+	parsePbn,
+} from "../pbn";
 
 const SAMPLE = `% PBN 2.1
 [Event "Daily Asia"]
@@ -43,10 +48,31 @@ describe("PBN profile", () => {
 
 	it("exports a document that can be parsed again", () => {
 		const parsed = parsePbn(SAMPLE);
+		Object.assign(
+			parsed.games[0]?.tags ?? {},
+			createDoubleDummyPbnTags({
+				actualContractMaxTricks: 10,
+				ddTable: { NS: 10, EW: 3 },
+				par: { contracts: ["4S N"], score: 620 },
+				solverVersion: "dds-wasm-test",
+			})
+		);
 		const reparsed = parsePbn(exportPbn(parsed.games));
 		expect(reparsed.games[0]?.tags.Deal).toBe(parsed.games[0]?.tags.Deal);
 		expect(reparsed.games[0]?.auction?.map((call) => call.call)).toEqual(
 			parsed.games[0]?.auction?.map((call) => call.call)
 		);
+		expect(reparsed.games[0]?.play?.map((action) => action.card)).toEqual(
+			parsed.games[0]?.play?.map((action) => action.card)
+		);
+		expect(reparsed.games[0]?.tags.Result).toBe(parsed.games[0]?.tags.Result);
+		expect(reparsed.games[0]?.tags.DoubleDummyTable).toBe('{"EW":3,"NS":10}');
+		expect(reparsed.games[0]?.tags.ParContracts).toBe("4S N");
+	});
+
+	it("converts a stored result delta to the PBN trick count", () => {
+		expect(contractResultToTricks("4SX", 1)).toBe("11");
+		expect(contractResultToTricks("3NT", -1)).toBe("8");
+		expect(contractResultToTricks(undefined, 0)).toBe("?");
 	});
 });

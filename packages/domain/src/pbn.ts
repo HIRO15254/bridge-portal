@@ -4,6 +4,7 @@ const seatOrder: Seat[] = ["N", "E", "S", "W"];
 const noteTokenPattern = /^=\d+=$/;
 const whitespacePattern = /\s+/;
 const cardTokenPattern = /^[SHDC][AKQJT2-9]$/i;
+const contractPattern = /^([1-7])(?:C|D|H|S|NT)/i;
 const requiredTournamentTags = [
 	"FunbridgeTournamentId",
 	"FunbridgeTournamentFamily",
@@ -29,6 +30,44 @@ export interface PbnDocument {
 	directives: string[];
 	games: PbnGame[];
 	warnings: string[];
+}
+
+export interface DoubleDummyPbnValue {
+	actualContractMaxTricks: number | null;
+	ddTable: Record<string, number>;
+	par: { contracts: string[]; score: number };
+	solverVersion: string;
+}
+
+export function createDoubleDummyPbnTags(
+	value: DoubleDummyPbnValue
+): Record<string, string> {
+	const sortedTable = Object.fromEntries(
+		Object.entries(value.ddTable).sort(([left], [right]) =>
+			left.localeCompare(right)
+		)
+	);
+	return {
+		ActualContractMaxTricks:
+			value.actualContractMaxTricks === null
+				? "?"
+				: String(value.actualContractMaxTricks),
+		DoubleDummySolver: value.solverVersion,
+		DoubleDummyTable: JSON.stringify(sortedTable),
+		ParContracts: value.par.contracts.join(";"),
+		ParScore: String(value.par.score),
+	};
+}
+
+export function contractResultToTricks(
+	contract: string | null | undefined,
+	resultDelta: number | null | undefined
+): string {
+	if (resultDelta == null) {
+		return "?";
+	}
+	const level = contractPattern.exec(contract ?? "")?.[1];
+	return level ? String(Number(level) + 6 + resultDelta) : "?";
 }
 
 function nextSeat(seat: Seat, offset: number): Seat {

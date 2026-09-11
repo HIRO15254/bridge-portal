@@ -7,6 +7,7 @@ import {
 	boardScore,
 	createDb,
 	deal,
+	doubleDummyResult,
 	evaluationRun,
 	importRevision,
 	playAction,
@@ -17,16 +18,18 @@ import {
 	user,
 } from "@bridge-portal/db";
 import {
-	type BridgeDeal,
+	contractResultToTricks,
+	createDoubleDummyPbnTags,
+	dealToPbn,
 	evaluateBoard,
 	exportPbn,
 	JCBL_RULESET_VERSION,
+	normalizeSystemSettings,
 	type PbnGame,
-	parsePbn,
+	parseFunbridgeJson,
 	RULE_ENGINE_VERSION,
 	type Seat,
 	type SystemSnapshot,
-	tournamentFamilies,
 } from "@bridge-portal/domain";
 import { createServerEnv } from "@bridge-portal/env/server";
 import { trpcServer } from "@hono/trpc-server";
@@ -34,11 +37,8 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-const MAX_PBN_BYTES = 10 * 1024 * 1024;
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const seats = ["N", "E", "S", "W"] as const;
-const dealPattern = /^(N|E|S|W):(.+)$/i;
-const whitespacePattern = /\s+/;
-const integerPattern = /^-?\d+$/;
 const bearerPattern = /^Bearer\s+/i;
 const seatTagNames = { N: "North", E: "East", S: "South", W: "West" } as const;
 
@@ -76,100 +76,6 @@ async function sha256(value: ArrayBuffer | string): Promise<string> {
 	return [...new Uint8Array(digest)]
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("");
-}
-
-function parseDate(value?: string): Date | undefined {
-	if (!value || value === "?") {
-		return;
-	}
-	const parsed = new Date(value.replaceAll(".", "-").replace(" ", "T"));
-	return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function vulnerability(value?: string): BridgeDeal["vulnerability"] {
-	const normalized = value?.toUpperCase();
-	if (normalized === "NS" || normalized === "EW") {
-		return normalized;
-	}
-	if (normalized === "ALL" || normalized === "BOTH") {
-		return "Both";
-	}
-	return "None";
-}
-
-function readDeal(tags: Record<string, string>): BridgeDeal | undefined {
-	const match = dealPattern.exec(tags.Deal ?? "");
-	if (!match) {
-		return;
-	}
-	const first = match[1]?.toUpperCase() as Seat;
-	const values = (match[2] ?? "").trim().split(whitespacePattern);
-	if (values.length !== 4) {
-		return;
-	}
-	const hands = { N: "", E: "", S: "", W: "" };
-	for (let index = 0; index < 4; index += 1) {
-		const seat = seats[(seats.indexOf(first) + index) % 4];
-		if (seat) {
-			hands[seat] = values[index] ?? "";
-		}
-	}
-	return {
-		boardNumber: Number.parseInt(tags.Board ?? "0", 10) || 0,
-		contract: tags.Contract === "?" ? undefined : tags.Contract,
-		dealer: seats.includes(tags.Dealer as Seat) ? (tags.Dealer as Seat) : first,
-		declarer: seats.includes(tags.Declarer as Seat)
-			? (tags.Declarer as Seat)
-			: undefined,
-		hands,
-		result: integerPattern.test(tags.Result ?? "")
-			? Number(tags.Result)
-			: undefined,
-		vulnerability: vulnerability(tags.Vulnerable),
-	};
-}
-
-function resolveHeroSeat(
-	tags: Record<string, string>,
-	confirmed?: string
-): Seat | undefined {
-	if (seats.includes(confirmed as Seat)) {
-		return confirmed as Seat;
-	}
-	const playerId = tags.FunbridgePlayerId;
-	if (!playerId) {
-		return;
-	}
-	const matches = seats.filter(
-		(seat) =>
-			tags[{ N: "North", E: "East", S: "South", W: "West" }[seat]] === playerId
-	);
-	return matches.length === 1 ? matches[0] : undefined;
-}
-
-function familyMetadata(
-	tags: Record<string, string>
-): Record<string, string | number | null> {
-	const keys = [
-		"FunbridgeBpLevel",
-		"FunbridgeMultiplier",
-		"FunbridgeBpAwarded",
-		"FunbridgeEventType",
-		"FunbridgeRegion",
-		"FunbridgeSeriesLevel",
-		"FunbridgeSeriesPeriod",
-		"FunbridgeSeriesOutcome",
-	];
-	return Object.fromEntries(
-		keys
-			.filter((key) => tags[key] !== undefined)
-			.map((key) => [key, tags[key] ?? null])
-	);
-}
-
-function readScoreType(tags: Record<string, string>): "MP" | "IMP" {
-	const value = (tags.FunbridgeScoreType ?? tags.Scoring ?? "").toUpperCase();
-	return value.includes("IMP") ? "IMP" : "MP";
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -242,7 +148,7 @@ app.post("/api/bootstrap", async (context) => {
 });
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Import is an ordered persistence pipeline; keeping it together makes partial-state handling auditable.
-app.post("/api/imports/pbn", async (context) => {
+app.post("/api/imports/funbridge-json", async (context) => {
 	const auth = authFor(context.env);
 	const session = await auth.api.getSession({
 		headers: context.req.raw.headers,
@@ -252,9 +158,13 @@ app.post("/api/imports/pbn", async (context) => {
 	}
 	const form = await context.req.formData();
 	const file = form.get("file");
-	if (!(file instanceof File) || file.size === 0 || file.size > MAX_PBN_BYTES) {
+	if (
+		!(file instanceof File) ||
+		file.size === 0 ||
+		file.size > MAX_IMPORT_BYTES
+	) {
 		return context.json(
-			{ error: "INVALID_FILE", maxBytes: MAX_PBN_BYTES },
+			{ error: "INVALID_FILE", maxBytes: MAX_IMPORT_BYTES },
 			400
 		);
 	}
@@ -275,66 +185,89 @@ app.post("/api/imports/pbn", async (context) => {
 		});
 	}
 
-	const parsed = parsePbn(new TextDecoder().decode(bytes));
-	const first = parsed.games[0];
-	if (!first) {
-		return context.json({ error: "NO_PBN_GAMES" }, 400);
-	}
-	const family = first.tags.FunbridgeTournamentFamily;
-	if (
-		!tournamentFamilies.includes(family as (typeof tournamentFamilies)[number])
-	) {
+	let parsed: ReturnType<typeof parseFunbridgeJson>;
+	try {
+		parsed = parseFunbridgeJson(new TextDecoder().decode(bytes));
+	} catch (error) {
 		return context.json(
-			{ error: "INVALID_TOURNAMENT_FAMILY", accepted: tournamentFamilies },
+			{
+				error: "INVALID_FUNBRIDGE_JSON",
+				message: error instanceof Error ? error.message : "Invalid JSON",
+			},
 			400
 		);
 	}
-	const externalId = first.tags.FunbridgeTournamentId;
-	if (!externalId) {
-		return context.json({ error: "MISSING_FunbridgeTournamentId" }, 400);
+	const family = parsed.family;
+	const externalId = parsed.externalId;
+	const importingUser = await db.query.user.findFirst({
+		where: eq(user.id, session.user.id),
+	});
+	if (
+		importingUser?.funbridgeId &&
+		importingUser.funbridgeId !== parsed.funbridgeId
+	) {
+		return context.json(
+			{
+				error: "FUNBRIDGE_ID_MISMATCH",
+				message: "登録済みのFunbridge IDとJSON内のIDが一致しません。",
+			},
+			409
+		);
 	}
-
-	let current = await db.query.tournament.findFirst({
+	const shouldAssignFunbridgeId = Boolean(
+		importingUser && !importingUser.funbridgeId
+	);
+	const current = await db.query.tournament.findFirst({
 		where: and(
 			eq(tournament.userId, session.user.id),
-			eq(tournament.family, family as (typeof tournamentFamilies)[number]),
+			eq(tournament.family, family),
 			eq(tournament.externalId, externalId)
 		),
 	});
 	const createdTournament = !current;
 	const tournamentId = current?.id ?? crypto.randomUUID();
-	if (!current) {
-		await db.insert(tournament).values({
-			id: tournamentId,
-			userId: session.user.id,
-			externalId,
-			family: family as (typeof tournamentFamilies)[number],
-			name: first.tags.Event || `Funbridge ${externalId}`,
-		});
-		current = await db.query.tournament.findFirst({
-			where: eq(tournament.id, tournamentId),
-		});
-	}
-	const previous = await db.query.tournamentRevision.findFirst({
-		where: eq(tournamentRevision.tournamentId, tournamentId),
-		orderBy: desc(tournamentRevision.revisionNumber),
-	});
+	const previous = current
+		? await db.query.tournamentRevision.findFirst({
+				where: eq(tournamentRevision.tournamentId, tournamentId),
+				orderBy: desc(tournamentRevision.revisionNumber),
+			})
+		: undefined;
 	const revisionNumber = (previous?.revisionNumber ?? 0) + 1;
 	const importId = crypto.randomUUID();
 	const revisionId = crypto.randomUUID();
-	const r2Key = `${session.user.id}/${family}/${externalId}/${revisionNumber}-${hash}.pbn`;
-	await context.env.RAW_IMPORTS.put(r2Key, bytes, {
-		httpMetadata: { contentType: "application/x-pbn" },
-		customMetadata: { sha256: hash },
-	});
+	const externalIdKey = await sha256(externalId);
+	const r2Key = `${session.user.id}/${family}/${externalIdKey}/${revisionNumber}-${hash}.json`;
 	const warnings = [...parsed.warnings];
 	const confirmedHeroSeat = form.get("heroSeat")?.toString();
 	if (
-		parsed.games.some((game) => !resolveHeroSeat(game.tags, confirmedHeroSeat))
+		confirmedHeroSeat &&
+		!seats.includes(confirmedHeroSeat as (typeof seats)[number])
 	) {
+		return context.json({ error: "INVALID_HERO_SEAT" }, 400);
+	}
+	if (parsed.boards.some((board) => !(board.heroSeat || confirmedHeroSeat))) {
 		warnings.push("HERO_SEAT_CONFIRMATION_REQUIRED");
 	}
 	try {
+		if (createdTournament) {
+			await db.insert(tournament).values({
+				id: tournamentId,
+				userId: session.user.id,
+				externalId,
+				family,
+				name: parsed.name,
+			});
+		}
+		await context.env.RAW_IMPORTS.put(r2Key, bytes, {
+			httpMetadata: { contentType: "application/json" },
+			customMetadata: { sha256: hash, source: "funbridge" },
+		});
+		if (shouldAssignFunbridgeId) {
+			await db
+				.update(user)
+				.set({ funbridgeId: parsed.funbridgeId })
+				.where(eq(user.id, session.user.id));
+		}
 		await db.insert(importRevision).values({
 			id: importId,
 			userId: session.user.id,
@@ -349,24 +282,14 @@ app.post("/api/imports/pbn", async (context) => {
 			tournamentId,
 			importRevisionId: importId,
 			revisionNumber,
-			playedAt: parseDate(first.tags.FunbridgePlayedAt),
-			completion: first.tags.FunbridgeCompletion || "UNKNOWN",
-			boardCount: parsed.games.length,
-			scoreType: readScoreType(first.tags),
-			tournamentScore: Number.isFinite(
-				Number(first.tags.FunbridgeTournamentScore)
-			)
-				? Number(first.tags.FunbridgeTournamentScore)
-				: null,
-			rank: Number.isFinite(Number(first.tags.FunbridgeRank))
-				? Number(first.tags.FunbridgeRank)
-				: null,
-			participantCount: Number.isFinite(
-				Number(first.tags.FunbridgeParticipantCount)
-			)
-				? Number(first.tags.FunbridgeParticipantCount)
-				: null,
-			familyMetadata: familyMetadata(first.tags),
+			playedAt: parsed.playedAt,
+			completion: parsed.completion,
+			boardCount: parsed.declaredBoardCount,
+			scoreType: parsed.scoreType,
+			tournamentScore: parsed.score ?? null,
+			rank: parsed.rank ?? null,
+			participantCount: parsed.participantCount ?? null,
+			familyMetadata: parsed.familyMetadata,
 		});
 
 		const assignedVersion = current?.defaultSystemVersionId
@@ -380,15 +303,15 @@ app.post("/api/imports/pbn", async (context) => {
 					rulesetVersion: assignedVersion.rulesetVersion,
 					adoptedOfficialItemIds: assignedVersion.adoptedOfficialItemIds,
 					selectedVariants: assignedVersion.selectedVariants,
-					settings: assignedVersion.settings,
+					settings: normalizeSystemSettings(assignedVersion.settings),
 				}
 			: undefined;
-		for (const game of parsed.games) {
-			const bridgeDeal = readDeal(game.tags);
-			if (!bridgeDeal) {
-				continue;
-			}
-			const dealHash = await sha256(game.tags.Deal ?? "");
+		for (const game of parsed.boards) {
+			const bridgeDeal = game.deal;
+			const pbnDeal = dealToPbn(bridgeDeal);
+			const dealHash = await sha256(
+				`${bridgeDeal.dealer}|${bridgeDeal.vulnerability}|${pbnDeal}`
+			);
 			let storedDeal = await db.query.deal.findFirst({
 				where: eq(deal.dealHash, dealHash),
 			});
@@ -400,7 +323,7 @@ app.post("/api/imports/pbn", async (context) => {
 						dealHash,
 						dealer: bridgeDeal.dealer,
 						vulnerability: bridgeDeal.vulnerability,
-						pbnDeal: game.tags.Deal ?? "",
+						pbnDeal,
 					})
 					.onConflictDoNothing();
 				storedDeal = await db.query.deal.findFirst({
@@ -408,10 +331,14 @@ app.post("/api/imports/pbn", async (context) => {
 				});
 			}
 			if (!storedDeal) {
-				continue;
+				throw new Error("DEAL_PERSISTENCE_FAILED");
 			}
 			const boardId = crypto.randomUUID();
-			const heroSeat = resolveHeroSeat(game.tags, confirmedHeroSeat);
+			const heroSeat =
+				game.heroSeat ??
+				(seats.includes(confirmedHeroSeat as Seat)
+					? (confirmedHeroSeat as Seat)
+					: undefined);
 			await db.insert(boardAttempt).values({
 				id: boardId,
 				tournamentRevisionId: revisionId,
@@ -447,15 +374,11 @@ app.post("/api/imports/pbn", async (context) => {
 					}))
 				);
 			}
-			const scoreType = readScoreType(game.tags);
-			const scoreValue = Number(
-				game.tags.FunbridgeBoardScore ?? game.tags.Score
-			);
 			await db.insert(boardScore).values({
 				id: crypto.randomUUID(),
 				boardAttemptId: boardId,
-				type: scoreType,
-				value: Number.isFinite(scoreValue) ? scoreValue : null,
+				type: parsed.scoreType,
+				value: game.score ?? null,
 				contractMade:
 					bridgeDeal.result === undefined ? null : bridgeDeal.result >= 0,
 			});
@@ -472,7 +395,7 @@ app.post("/api/imports/pbn", async (context) => {
 				auction: game.auction,
 				deal: bridgeDeal,
 				heroSeat,
-				playComplete: !game.incompletePlay,
+				playComplete: game.playComplete,
 				play: game.play,
 				system,
 			});
@@ -489,7 +412,11 @@ app.post("/api/imports/pbn", async (context) => {
 		}
 		await db
 			.update(tournament)
-			.set({ activeRevisionId: revisionId, updatedAt: new Date() })
+			.set({
+				activeRevisionId: revisionId,
+				name: parsed.name,
+				updatedAt: new Date(),
+			})
 			.where(eq(tournament.id, tournamentId));
 		await db
 			.update(importRevision)
@@ -512,6 +439,12 @@ app.post("/api/imports/pbn", async (context) => {
 		await db.delete(importRevision).where(eq(importRevision.id, importId));
 		if (createdTournament) {
 			await db.delete(tournament).where(eq(tournament.id, tournamentId));
+		}
+		if (shouldAssignFunbridgeId) {
+			await db
+				.update(user)
+				.set({ funbridgeId: null })
+				.where(eq(user.id, session.user.id));
 		}
 		await context.env.RAW_IMPORTS.delete(r2Key);
 		throw error;
@@ -542,6 +475,10 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 		return context.json({ error: "NOT_FOUND" }, 404);
 	}
 	const tournamentItem = board.tournamentRevision.tournament;
+	const doubleDummy = await db.query.doubleDummyResult.findFirst({
+		where: eq(doubleDummyResult.boardAttemptId, board.id),
+		orderBy: desc(doubleDummyResult.createdAt),
+	});
 	const player = await db.query.user.findFirst({
 		where: eq(user.id, session.user.id),
 	});
@@ -549,16 +486,30 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 	if (board.heroSeat && player?.funbridgeId) {
 		nameTags[seatTagNames[board.heroSeat]] = player.funbridgeId;
 	}
+	const orderedAuction = [...board.auctionCalls].sort(
+		(left, right) => left.callIndex - right.callIndex
+	);
+	const orderedPlay = [...board.playActions].sort(
+		(left, right) => left.actionIndex - right.actionIndex
+	);
+	const familyTags = Object.fromEntries(
+		Object.entries(board.tournamentRevision.familyMetadata ?? {}).map(
+			([key, value]) => [
+				`Funbridge${key.charAt(0).toUpperCase()}${key.slice(1)}`,
+				value == null ? "?" : String(value),
+			]
+		)
+	);
 	const game: PbnGame = {
-		auction: board.auctionCalls.map((call) => ({
+		auction: orderedAuction.map((call) => ({
 			alert: call.alert ?? undefined,
 			call: call.call,
 			index: call.callIndex,
 			seat: call.seat,
 		})),
-		incompleteAuction: board.auctionCalls.length === 0,
-		incompletePlay: board.playActions.length < 52,
-		play: board.playActions.map((action) => ({
+		incompleteAuction: orderedAuction.length === 0,
+		incompletePlay: orderedPlay.length < 52,
+		play: orderedPlay.map((action) => ({
 			card: action.card,
 			index: action.actionIndex,
 			seat: action.seat,
@@ -580,11 +531,32 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 			Scoring: board.score?.type ?? board.tournamentRevision.scoreType,
 			Declarer: board.declarer ?? "?",
 			Contract: board.contract ?? "?",
-			Result: board.result === null ? "?" : String(board.result),
+			Result: contractResultToTricks(board.contract, board.result),
 			FunbridgeTournamentId: tournamentItem.externalId,
 			FunbridgeTournamentFamily: tournamentItem.family,
 			FunbridgePlayerId: player?.funbridgeId ?? "?",
-			System: board.systemVersion?.name ?? "?",
+			FunbridgePlayedAt:
+				board.tournamentRevision.playedAt?.toISOString() ?? "?",
+			FunbridgeCompletion: board.tournamentRevision.completion,
+			FunbridgeBoardCount: String(board.tournamentRevision.boardCount),
+			FunbridgeTournamentScore:
+				board.tournamentRevision.tournamentScore === null
+					? "?"
+					: String(board.tournamentRevision.tournamentScore),
+			FunbridgeRank:
+				board.tournamentRevision.rank === null
+					? "?"
+					: String(board.tournamentRevision.rank),
+			FunbridgeParticipantCount:
+				board.tournamentRevision.participantCount === null
+					? "?"
+					: String(board.tournamentRevision.participantCount),
+			...familyTags,
+			System: board.systemVersion
+				? `${board.systemVersion.name} v${board.systemVersion.versionNumber}`
+				: "?",
+			Play: orderedPlay[0]?.seat ?? "?",
+			...(doubleDummy ? createDoubleDummyPbnTags(doubleDummy) : {}),
 		},
 		warnings: [],
 	};
@@ -608,6 +580,18 @@ app.use("/trpc/*", (context, next) => {
 });
 
 app.get("/", (context) => context.text("OK"));
+
+app.onError((error, context) => {
+	console.error(
+		JSON.stringify({
+			error: error.message,
+			message: "Unhandled Worker request error",
+			method: context.req.method,
+			path: context.req.path,
+		})
+	);
+	return context.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
+});
 
 export { app };
 export default app;

@@ -17,11 +17,14 @@ function TournamentsPage() {
 		setBusy(true);
 		setMessage("");
 		const data = new FormData(event.currentTarget);
-		const response = await fetch(`${env.VITE_SERVER_URL}/api/imports/pbn`, {
-			method: "POST",
-			body: data,
-			credentials: "include",
-		});
+		const response = await fetch(
+			`${env.VITE_SERVER_URL}/api/imports/funbridge-json`,
+			{
+				method: "POST",
+				body: data,
+				credentials: "include",
+			}
+		);
 		const result = (await response.json()) as {
 			error?: string;
 			duplicate?: boolean;
@@ -30,7 +33,7 @@ function TournamentsPage() {
 		if (!response.ok) {
 			setMessage(`取込に失敗しました: ${result.error ?? response.status}`);
 		} else if (result.duplicate) {
-			setMessage("同じPBNはすでに取り込み済みです。");
+			setMessage("同じFunbridge JSONはすでに取り込み済みです。");
 		} else {
 			const warning = result.warnings?.length
 				? `（確認: ${result.warnings.join(", ")}）`
@@ -48,22 +51,30 @@ function TournamentsPage() {
 				<div>
 					<p className="eyebrow">TOURNAMENTS</p>
 					<h1>Funbridgeの実戦を取り込む。</h1>
-					<p>PBN 2.1と専用タグから、局・Auction・Play・成績を保存します。</p>
+					<p>Funbridge JSONから、局・Auction・Play・成績を保存します。</p>
 				</div>
 			</div>
 			<form className="upload-panel" onSubmit={upload}>
 				<div>
-					<strong>PBNファイル</strong>
+					<strong>Funbridge JSONファイル</strong>
 					<p>最大10 MiB。完全／不完全なAuction・Playのどちらも受け付けます。</p>
+					<a download href="/funbridge-import-example.json">
+						取込フォーマット例をダウンロード
+					</a>
 				</div>
 				<label className="file-input">
-					<input accept=".pbn,text/plain" name="file" required type="file" />
+					<input
+						accept=".json,application/json"
+						name="file"
+						required
+						type="file"
+					/>
 					<span>ファイルを選ぶ</span>
 				</label>
 				<label>
 					本人席（自動判定できない場合）
 					<select defaultValue="" name="heroSeat">
-						<option value="">PBNから自動判定</option>
+						<option value="">JSONから自動判定</option>
 						<option>N</option>
 						<option>E</option>
 						<option>S</option>

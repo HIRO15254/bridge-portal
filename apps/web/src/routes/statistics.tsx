@@ -90,7 +90,14 @@ function StatisticsPage() {
 								{row.ruleVersionId}
 								<small>{row.verdict}</small>
 							</strong>
-							<span>{row.family}</span>
+							<span>
+								{row.family}
+								<small>
+									{row.systemVersionName
+										? `${row.systemVersionName} v${row.systemVersionNumber}`
+										: "System未設定"}
+								</small>
+							</span>
 							<span>
 								{row.averageScore == null
 									? "—"

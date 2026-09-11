@@ -36,11 +36,25 @@ function getAuctionIndent(
 	return calls[0] ? auctionOrder.indexOf(calls[0].seat) : 0;
 }
 
+async function reevaluateBoard(
+	boardId: string,
+	setReevaluating: (value: boolean) => void
+) {
+	setReevaluating(true);
+	try {
+		await trpcClient.boards.reevaluate.mutate({ boardId });
+		await queryClient.invalidateQueries();
+	} finally {
+		setReevaluating(false);
+	}
+}
+
 function BoardPage() {
 	const { boardId } = Route.useParams();
 	const board = useQuery(trpc.boards.byId.queryOptions({ id: boardId }));
 	const systems = useQuery(trpc.systems.list.queryOptions());
 	const [ddsStatus, setDdsStatus] = useState("");
+	const [reevaluating, setReevaluating] = useState(false);
 	const [correction, setCorrection] = useState<{
 		evaluationId: string;
 		verdict: (typeof overrideVerdicts)[number];
@@ -247,7 +261,17 @@ function BoardPage() {
 						<p className="eyebrow">ALL RULE EVALUATIONS</p>
 						<h2>22項目の判定</h2>
 					</div>
-					<span>{item?.evaluationRun?.ruleEngineVersion ?? "—"}</span>
+					<div>
+						<span>{item?.evaluationRun?.ruleEngineVersion ?? "—"}</span>
+						<button
+							className="secondary"
+							disabled={reevaluating}
+							onClick={() => reevaluateBoard(boardId, setReevaluating)}
+							type="button"
+						>
+							現在Engineで再評価
+						</button>
+					</div>
 				</div>
 				{correction && (
 					<form className="correction-form" onSubmit={submitCorrection}>

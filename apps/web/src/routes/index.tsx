@@ -20,7 +20,7 @@ function HomePage() {
 					<p>今日もひとつ、実戦から確かな判断を積み上げましょう。</p>
 				</div>
 				<Link className="primary button-link" to="/tournaments">
-					＋ PBNを取り込む
+					＋ Funbridge JSONを取り込む
 				</Link>
 			</div>
 			<section className="metric-grid">
@@ -71,7 +71,7 @@ function HomePage() {
 						<li>
 							<span>03</span>
 							<div>
-								<strong>PBNを取り込む</strong>
+								<strong>Funbridge JSONを取り込む</strong>
 								<p>Funbridgeの実戦を評価し、次の課題へ戻ります。</p>
 							</div>
 						</li>

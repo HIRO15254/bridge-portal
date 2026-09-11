@@ -141,17 +141,40 @@ function SystemEditor({
 				),
 			])
 		);
+		const selectedSmallLead = String(data.get("fromSmall"));
+		const selectedAkLead = String(data.get("fromAk"));
+		const leadVariants = selectedVariants["A-CA-01"] ?? [];
+		selectedVariants["A-CA-01"] = [
+			...leadVariants.filter(
+				(variant) =>
+					![
+						"Fourth highest",
+						"Top of Nothing",
+						"MUD",
+						"A from AK",
+						"K from AK",
+					].includes(variant)
+			),
+			{
+				FOURTH_HIGHEST: "Fourth highest",
+				MUD: "MUD",
+				TOP_OF_NOTHING: "Top of Nothing",
+			}[selectedSmallLead] ?? "Fourth highest",
+			`${selectedAkLead} from AK`,
+		];
 		await onSave({
 			systemId,
 			adoptedOfficialItemIds,
 			selectedVariants,
 			settings: {
 				opening: {
+					oneLevelMinHcp: numberValue(data, "openingOneLevelMinHcp"),
 					oneClubMinLength: numberValue(data, "oneClubMinLength"),
 					oneDiamondMinLength: numberValue(data, "oneDiamondMinLength"),
 					oneMajorMinLength: numberValue(data, "oneMajorMinLength"),
 					oneNtMinHcp: numberValue(data, "oneNtMinHcp"),
 					oneNtMaxHcp: numberValue(data, "oneNtMaxHcp"),
+					naturalStrongTwoMinHcp: numberValue(data, "naturalStrongTwoMinHcp"),
 					weakTwoMinHcp: numberValue(data, "weakTwoMinHcp"),
 					weakTwoMaxHcp: numberValue(data, "weakTwoMaxHcp"),
 				},
@@ -159,6 +182,22 @@ function SystemEditor({
 					minimumResponseHcp: numberValue(data, "minimumResponseHcp"),
 					invitationalMinHcp: numberValue(data, "invitationalMinHcp"),
 					gameForcingMinHcp: numberValue(data, "gameForcingMinHcp"),
+					openerRebidMinHcp: numberValue(data, "openerRebidMinHcp"),
+					openerRebidNewSuitMinLength: numberValue(
+						data,
+						"openerRebidNewSuitMinLength"
+					),
+					responderRebidMinHcp: numberValue(data, "responderRebidMinHcp"),
+					responderRebidNewSuitMinLength: numberValue(
+						data,
+						"responderRebidNewSuitMinLength"
+					),
+					weakResponseMaxHcp: numberValue(data, "weakResponseMaxHcp"),
+					weakTwoInquiryMinHcp: numberValue(data, "weakTwoInquiryMinHcp"),
+					blackwoodMinHcp: numberValue(data, "blackwoodMinHcp"),
+					gerberMinHcp: numberValue(data, "gerberMinHcp"),
+					grandSlamForceMinHcp: numberValue(data, "grandSlamForceMinHcp"),
+					fitShowingJumpMinHcp: numberValue(data, "fitShowingJumpMinHcp"),
 				},
 				overcall: {
 					oneLevelMinHcp: numberValue(data, "oneLevelMinHcp"),
@@ -166,9 +205,17 @@ function SystemEditor({
 					twoLevelMinHcp: numberValue(data, "twoLevelMinHcp"),
 					twoLevelMinLength: numberValue(data, "twoLevelMinLength"),
 				},
+				competitive: {
+					takeoutDoubleMinHcp: numberValue(data, "takeoutDoubleMinHcp"),
+					negativeDoubleMinHcp: numberValue(data, "negativeDoubleMinHcp"),
+					sosRedoubleMaxHcp: numberValue(data, "sosRedoubleMaxHcp"),
+					gameForcingCueMinHcp: numberValue(data, "gameForcingCueMinHcp"),
+					supportCueMinHcp: numberValue(data, "supportCueMinHcp"),
+					lightnerRequireVoid: data.has("lightnerRequireVoid"),
+				},
 				lead: {
-					fromAk: String(data.get("fromAk")) as "A" | "K",
-					fromSmall: String(data.get("fromSmall")) as
+					fromAk: selectedAkLead as "A" | "K",
+					fromSmall: selectedSmallLead as
 						| "FOURTH_HIGHEST"
 						| "TOP_OF_NOTHING"
 						| "MUD",
@@ -178,12 +225,21 @@ function SystemEditor({
 					attitude: "HIGH_ENCOURAGING",
 					count: "HIGH_EVEN",
 					preference: "HIGH_HIGHER_SUIT",
-					priority: ["ATTITUDE", "COUNT", "SUIT_PREFERENCE"],
+					priority: [
+						String(data.get("signalPriority1")),
+						String(data.get("signalPriority2")),
+						String(data.get("signalPriority3")),
+					] as ["ATTITUDE", "COUNT", "SUIT_PREFERENCE"],
 				},
 			},
 		});
 	}
 	const numberFields = [
+		[
+			"openingOneLevelMinHcp",
+			"1-level Opening 下限HCP",
+			draft.settings.opening.oneLevelMinHcp,
+		],
 		[
 			"oneClubMinLength",
 			"1♣ 最小枚数",
@@ -201,6 +257,11 @@ function SystemEditor({
 		],
 		["oneNtMinHcp", "1NT 下限HCP", draft.settings.opening.oneNtMinHcp],
 		["oneNtMaxHcp", "1NT 上限HCP", draft.settings.opening.oneNtMaxHcp],
+		[
+			"naturalStrongTwoMinHcp",
+			"Natural Strong Two下限",
+			draft.settings.opening.naturalStrongTwoMinHcp,
+		],
 		["weakTwoMinHcp", "Weak Two 下限", draft.settings.opening.weakTwoMinHcp],
 		["weakTwoMaxHcp", "Weak Two 上限", draft.settings.opening.weakTwoMaxHcp],
 		[
@@ -217,6 +278,56 @@ function SystemEditor({
 			"gameForcingMinHcp",
 			"GF 下限",
 			draft.settings.responseRebid.gameForcingMinHcp,
+		],
+		[
+			"openerRebidMinHcp",
+			"Opener Rebid下限",
+			draft.settings.responseRebid.openerRebidMinHcp,
+		],
+		[
+			"openerRebidNewSuitMinLength",
+			"Opener Rebid新スーツ枚数",
+			draft.settings.responseRebid.openerRebidNewSuitMinLength,
+		],
+		[
+			"responderRebidMinHcp",
+			"Responder Rebid下限",
+			draft.settings.responseRebid.responderRebidMinHcp,
+		],
+		[
+			"responderRebidNewSuitMinLength",
+			"Responder Rebid新スーツ枚数",
+			draft.settings.responseRebid.responderRebidNewSuitMinLength,
+		],
+		[
+			"weakResponseMaxHcp",
+			"Weak response 上限",
+			draft.settings.responseRebid.weakResponseMaxHcp,
+		],
+		[
+			"weakTwoInquiryMinHcp",
+			"Weak Two 2NT Inquiry 下限",
+			draft.settings.responseRebid.weakTwoInquiryMinHcp,
+		],
+		[
+			"blackwoodMinHcp",
+			"Blackwood目安HCP",
+			draft.settings.responseRebid.blackwoodMinHcp,
+		],
+		[
+			"gerberMinHcp",
+			"Gerber目安HCP",
+			draft.settings.responseRebid.gerberMinHcp,
+		],
+		[
+			"grandSlamForceMinHcp",
+			"Grand Slam Force目安HCP",
+			draft.settings.responseRebid.grandSlamForceMinHcp,
+		],
+		[
+			"fitShowingJumpMinHcp",
+			"Fit-showing Jump下限",
+			draft.settings.responseRebid.fitShowingJumpMinHcp,
 		],
 		[
 			"oneLevelMinHcp",
@@ -238,6 +349,37 @@ function SystemEditor({
 			"2-level OC 枚数",
 			draft.settings.overcall.twoLevelMinLength,
 		],
+		[
+			"takeoutDoubleMinHcp",
+			"Takeout Double下限",
+			draft.settings.competitive.takeoutDoubleMinHcp,
+		],
+		[
+			"negativeDoubleMinHcp",
+			"Negative Double下限",
+			draft.settings.competitive.negativeDoubleMinHcp,
+		],
+		[
+			"sosRedoubleMaxHcp",
+			"SOS Redouble上限",
+			draft.settings.competitive.sosRedoubleMaxHcp,
+		],
+		[
+			"gameForcingCueMinHcp",
+			"GF Cue Bid下限",
+			draft.settings.competitive.gameForcingCueMinHcp,
+		],
+		[
+			"supportCueMinHcp",
+			"Support Cue下限",
+			draft.settings.competitive.supportCueMinHcp,
+		],
+	] as const;
+	const signalOptions = ["ATTITUDE", "COUNT", "SUIT_PREFERENCE"] as const;
+	const signalPriorityFields = [
+		"signalPriority1",
+		"signalPriority2",
+		"signalPriority3",
 	] as const;
 	return (
 		<details className="system-editor">
@@ -276,6 +418,27 @@ function SystemEditor({
 							<option value="MUD">MUD</option>
 						</select>
 					</label>
+					<label>
+						<input
+							defaultChecked={draft.settings.competitive.lightnerRequireVoid}
+							name="lightnerRequireVoid"
+							type="checkbox"
+						/>
+						Lightner Doubleは客観的なvoidを必要とする
+					</label>
+					{signalPriorityFields.map((field, index) => (
+						<label key={field}>
+							Signal優先順位 {index + 1}
+							<select
+								defaultValue={draft.settings.signal.priority[index]}
+								name={field}
+							>
+								{signalOptions.map((option) => (
+									<option key={option}>{option}</option>
+								))}
+							</select>
+						</label>
+					))}
 				</div>
 				<h3>採用Rule / Variant</h3>
 				<div className="rule-selector">

@@ -13,16 +13,20 @@ import {
 	tournamentRevision,
 } from "@bridge-portal/db";
 import {
+	automaticRuleVerdicts,
 	type BridgeDeal,
+	calculateComplianceMetrics,
 	defaultSystemSettings,
 	evaluateBoard,
 	JCBL_LIST_A_2026_05_01,
+	JCBL_RULESET_MANIFEST,
 	JCBL_RULESET_VERSION,
+	normalizeSystemSettings,
 	RULE_ENGINE_VERSION,
-	ruleVerdicts,
 	type Seat,
 	type SystemSnapshot,
 	systemSettingsSchema,
+	validateSystemDraft,
 } from "@bridge-portal/domain";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -34,6 +38,22 @@ const id = z.string().min(1).max(128);
 const seatOrder = ["N", "E", "S", "W"] as const;
 const dealPattern = /^(N|E|S|W):(.+)$/i;
 const whitespacePattern = /\s+/;
+const ddTableKeys = ["N", "E", "S", "W"].flatMap((seat) =>
+	["S", "H", "D", "C", "NT"].map((strain) => `${seat}:${strain}`)
+);
+const ddTableSchema = z
+	.record(z.string(), z.number().int().min(0).max(13))
+	.superRefine((table, context) => {
+		if (
+			Object.keys(table).length !== ddTableKeys.length ||
+			ddTableKeys.some((key) => table[key] === undefined)
+		) {
+			context.addIssue({
+				code: "custom",
+				message: "DD Tableには4席×5strainの20セルが必要です。",
+			});
+		}
+	});
 
 function bridgeDealFromStored(board: {
 	boardNumber: number;
@@ -85,13 +105,12 @@ async function assignSystemAndReevaluate(
 	if (!board) {
 		return;
 	}
-	await db
-		.update(boardAttempt)
-		.set({ systemVersionId: version?.id ?? null })
-		.where(eq(boardAttempt.id, boardId));
 	const parsedDeal = bridgeDealFromStored(board);
 	if (!parsedDeal) {
-		return;
+		throw new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "保存済みDealを再構成できません。",
+		});
 	}
 	const runId = crypto.randomUUID();
 	const snapshot: SystemSnapshot | undefined = version
@@ -100,17 +119,9 @@ async function assignSystemAndReevaluate(
 				name: version.name,
 				rulesetVersion: version.rulesetVersion,
 				selectedVariants: version.selectedVariants,
-				settings: version.settings,
+				settings: normalizeSystemSettings(version.settings),
 			}
 		: undefined;
-	await db.insert(evaluationRun).values({
-		id: runId,
-		boardAttemptId: board.id,
-		rulesetVersion: JCBL_RULESET_VERSION,
-		ruleEngineVersion: RULE_ENGINE_VERSION,
-		systemVersionId: version?.id,
-		completedAt: new Date(),
-	});
 	const evaluations = evaluateBoard({
 		auction: board.auctionCalls.map((call) => ({
 			alert: call.alert ?? undefined,
@@ -134,11 +145,28 @@ async function assignSystemAndReevaluate(
 		evaluationRunId: runId,
 		...evaluation,
 	}));
-	for (let offset = 0; offset < evaluationRows.length; offset += 10) {
-		await db
-			.insert(ruleEvaluation)
-			.values(evaluationRows.slice(offset, offset + 10));
-	}
+	const evaluationInserts = Array.from(
+		{ length: Math.ceil(evaluationRows.length / 10) },
+		(_, chunkIndex) =>
+			db
+				.insert(ruleEvaluation)
+				.values(evaluationRows.slice(chunkIndex * 10, chunkIndex * 10 + 10))
+	);
+	await db.batch([
+		db
+			.update(boardAttempt)
+			.set({ systemVersionId: version?.id ?? null })
+			.where(eq(boardAttempt.id, boardId)),
+		db.insert(evaluationRun).values({
+			id: runId,
+			boardAttemptId: board.id,
+			rulesetVersion: JCBL_RULESET_VERSION,
+			ruleEngineVersion: RULE_ENGINE_VERSION,
+			systemVersionId: version?.id,
+			completedAt: new Date(),
+		}),
+		...evaluationInserts,
+	]);
 }
 
 const selectedVariantsSchema = z.record(z.string(), z.array(z.string()));
@@ -165,6 +193,7 @@ const defaultSelectedVariants = Object.fromEntries(
 
 const rulesRouter = router({
 	list: protectedProcedure.query(() => JCBL_LIST_A_2026_05_01),
+	manifest: protectedProcedure.query(() => JCBL_RULESET_MANIFEST),
 	byId: protectedProcedure
 		.input(z.object({ officialItemId: id }))
 		.query(({ input }) => {
@@ -224,13 +253,26 @@ const rulesRouter = router({
 });
 
 const systemsRouter = router({
-	list: protectedProcedure.query(({ ctx }) =>
-		ctx.db.query.bridgeSystem.findMany({
+	list: protectedProcedure.query(async ({ ctx }) => {
+		const systems = await ctx.db.query.bridgeSystem.findMany({
 			where: eq(bridgeSystem.userId, ctx.session.user.id),
 			with: { draft: true, versions: true },
 			orderBy: desc(bridgeSystem.updatedAt),
-		})
-	),
+		});
+		return systems.map((system) => ({
+			...system,
+			draft: system.draft
+				? {
+						...system.draft,
+						settings: normalizeSystemSettings(system.draft.settings),
+					}
+				: system.draft,
+			versions: system.versions.map((version) => ({
+				...version,
+				settings: normalizeSystemSettings(version.settings),
+			})),
+		}));
+	}),
 	create: protectedProcedure
 		.input(z.object({ name: z.string().trim().min(1).max(100) }))
 		.mutation(async ({ ctx, input }) => {
@@ -295,54 +337,20 @@ const systemsRouter = router({
 			if (!owned?.draft) {
 				throw new TRPCError({ code: "NOT_FOUND" });
 			}
+			const issues = validateSystemDraft({
+				adoptedOfficialItemIds: owned.draft.adoptedOfficialItemIds,
+				rulesetVersion: owned.draft.rulesetVersion,
+				selectedVariants: owned.draft.selectedVariants,
+				settings: owned.draft.settings,
+			});
+			const issue = issues[0];
+			if (issue) {
+				throw new TRPCError({
+					code: issue.code === "CONFLICT" ? "CONFLICT" : "BAD_REQUEST",
+					message: issue.message,
+				});
+			}
 			const settings = systemSettingsSchema.parse(owned.draft.settings);
-			if (settings.opening.oneNtMinHcp > settings.opening.oneNtMaxHcp) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "1NTの下限が上限を超えています。",
-				});
-			}
-			if (settings.opening.weakTwoMinHcp > settings.opening.weakTwoMaxHcp) {
-				throw new TRPCError({
-					code: "BAD_REQUEST",
-					message: "Weak Twoの下限が上限を超えています。",
-				});
-			}
-			const adoptedRules = JCBL_LIST_A_2026_05_01.filter((item) =>
-				owned.draft?.adoptedOfficialItemIds.includes(item.officialItemId)
-			);
-			for (const rule of adoptedRules) {
-				const variants =
-					owned.draft.selectedVariants[rule.officialItemId] ?? [];
-				if (
-					variants.length === 0 ||
-					variants.some((variant) => !rule.variants.includes(variant as never))
-				) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: `${rule.officialItemId}のVariant設定が不完全です。`,
-					});
-				}
-			}
-			const strongDefinitions = owned.draft.selectedVariants["A-OB-02"] ?? [];
-			if (strongDefinitions.length > 1) {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message:
-						"強いハンドの定義が同一条件で競合しています。1つに絞ってください。",
-				});
-			}
-			const openingLeads = owned.draft.selectedVariants["A-CA-01"] ?? [];
-			if (
-				openingLeads.includes("A from AK") &&
-				openingLeads.includes("K from AK")
-			) {
-				throw new TRPCError({
-					code: "CONFLICT",
-					message:
-						"AKからのLead設定が競合しています。AまたはKを選んでください。",
-				});
-			}
 			const versionNumber =
 				Math.max(0, ...owned.versions.map((version) => version.versionNumber)) +
 				1;
@@ -483,15 +491,62 @@ const boardsRouter = router({
 				tournament: revision.tournament,
 			};
 		}),
+	reevaluate: protectedProcedure
+		.input(z.object({ boardId: id }))
+		.mutation(async ({ ctx, input }) => {
+			const board = await ctx.db.query.boardAttempt.findFirst({
+				where: eq(boardAttempt.id, input.boardId),
+				with: { tournamentRevision: { with: { tournament: true } } },
+			});
+			if (board?.tournamentRevision.tournament.userId !== ctx.session.user.id) {
+				throw new TRPCError({ code: "NOT_FOUND" });
+			}
+			const version = board.systemVersionId
+				? await ctx.db.query.systemVersion.findFirst({
+						where: eq(systemVersion.id, board.systemVersionId),
+					})
+				: undefined;
+			await assignSystemAndReevaluate(ctx.db, board.id, version);
+			return { ruleEngineVersion: RULE_ENGINE_VERSION };
+		}),
 	override: protectedProcedure
 		.input(
 			z.object({
 				evaluationId: id,
-				verdict: z.enum(ruleVerdicts),
+				verdict: z.enum(automaticRuleVerdicts),
 				reason: z.string().trim().min(3).max(1000),
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			const [ownedEvaluation] = await ctx.db
+				.select({ id: ruleEvaluation.id })
+				.from(ruleEvaluation)
+				.innerJoin(
+					evaluationRun,
+					eq(evaluationRun.id, ruleEvaluation.evaluationRunId)
+				)
+				.innerJoin(
+					boardAttempt,
+					eq(boardAttempt.id, evaluationRun.boardAttemptId)
+				)
+				.innerJoin(
+					tournamentRevision,
+					eq(tournamentRevision.id, boardAttempt.tournamentRevisionId)
+				)
+				.innerJoin(
+					tournament,
+					eq(tournament.id, tournamentRevision.tournamentId)
+				)
+				.where(
+					and(
+						eq(ruleEvaluation.id, input.evaluationId),
+						eq(tournament.userId, ctx.session.user.id)
+					)
+				)
+				.limit(1);
+			if (!ownedEvaluation) {
+				throw new TRPCError({ code: "NOT_FOUND" });
+			}
 			await ctx.db
 				.insert(ruleEvaluationOverride)
 				.values({
@@ -504,6 +559,7 @@ const boardsRouter = router({
 				.onConflictDoUpdate({
 					target: ruleEvaluationOverride.ruleEvaluationId,
 					set: {
+						createdAt: new Date(),
 						verdict: input.verdict,
 						reason: input.reason,
 						correctedByUserId: ctx.session.user.id,
@@ -545,7 +601,7 @@ const boardsRouter = router({
 			z.object({
 				actualContractMaxTricks: z.number().int().min(0).max(13).nullable(),
 				boardId: id,
-				ddTable: z.record(z.string(), z.number().int().min(0).max(13)),
+				ddTable: ddTableSchema,
 				par: z.object({
 					contracts: z.array(z.string()),
 					score: z.number().int(),
@@ -592,13 +648,14 @@ const boardsRouter = router({
 
 const statisticsRouter = router({
 	summary: protectedProcedure.query(async ({ ctx }) => {
+		const effectiveVerdict = sql<string>`coalesce(${ruleEvaluationOverride.verdict}, ${ruleEvaluation.automaticVerdict})`;
 		const tournamentIds = ctx.db
 			.select({ id: tournament.id })
 			.from(tournament)
 			.where(eq(tournament.userId, ctx.session.user.id));
 		const rows = await ctx.db
 			.select({
-				verdict: ruleEvaluation.automaticVerdict,
+				verdict: effectiveVerdict,
 				count: sql<number>`count(*)`,
 			})
 			.from(ruleEvaluation)
@@ -614,6 +671,10 @@ const statisticsRouter = router({
 				tournamentRevision,
 				eq(tournamentRevision.id, boardAttempt.tournamentRevisionId)
 			)
+			.leftJoin(
+				ruleEvaluationOverride,
+				eq(ruleEvaluationOverride.ruleEvaluationId, ruleEvaluation.id)
+			)
 			.where(
 				and(
 					inArray(tournamentRevision.tournamentId, tournamentIds),
@@ -624,27 +685,16 @@ const statisticsRouter = router({
 					)`
 				)
 			)
-			.groupBy(ruleEvaluation.automaticVerdict);
-		const counts = Object.fromEntries(
-			rows.map((row) => [row.verdict, Number(row.count)])
-		);
-		const complied = counts.COMPLIED ?? 0;
-		const wrong = counts.DEVIATED_WRONG_APPLICATION ?? 0;
-		const missed = counts.DEVIATED_MISSED_OPPORTUNITY ?? 0;
+			.groupBy(effectiveVerdict);
 		return {
 			engineVersion: RULE_ENGINE_VERSION,
-			counts,
-			applicationAccuracy:
-				complied + wrong === 0 ? null : complied / (complied + wrong),
-			usageRate:
-				complied + missed === 0 ? null : complied / (complied + missed),
-			overallCompliance:
-				complied + wrong + missed === 0
-					? null
-					: complied / (complied + wrong + missed),
+			...calculateComplianceMetrics(
+				rows.map((row) => ({ count: Number(row.count), verdict: row.verdict }))
+			),
 		};
 	}),
 	ruleBreakdown: protectedProcedure.query(({ ctx }) => {
+		const effectiveVerdict = sql<string>`coalesce(${ruleEvaluationOverride.verdict}, ${ruleEvaluation.automaticVerdict})`;
 		const tournamentIds = ctx.db
 			.select({ id: tournament.id })
 			.from(tournament)
@@ -660,7 +710,9 @@ const statisticsRouter = router({
 				sampleCount: sql<number>`count(*)`,
 				scoreType: boardScore.type,
 				systemVersionId: evaluationRun.systemVersionId,
-				verdict: ruleEvaluation.automaticVerdict,
+				systemVersionName: systemVersion.name,
+				systemVersionNumber: systemVersion.versionNumber,
+				verdict: effectiveVerdict,
 			})
 			.from(ruleEvaluation)
 			.innerJoin(
@@ -677,6 +729,14 @@ const statisticsRouter = router({
 			)
 			.innerJoin(tournament, eq(tournament.id, tournamentRevision.tournamentId))
 			.leftJoin(boardScore, eq(boardScore.boardAttemptId, boardAttempt.id))
+			.leftJoin(
+				systemVersion,
+				eq(systemVersion.id, evaluationRun.systemVersionId)
+			)
+			.leftJoin(
+				ruleEvaluationOverride,
+				eq(ruleEvaluationOverride.ruleEvaluationId, ruleEvaluation.id)
+			)
 			.where(
 				and(
 					inArray(tournamentRevision.tournamentId, tournamentIds),
@@ -689,10 +749,12 @@ const statisticsRouter = router({
 			)
 			.groupBy(
 				ruleEvaluation.ruleVersionId,
-				ruleEvaluation.automaticVerdict,
+				effectiveVerdict,
 				tournament.family,
 				boardScore.type,
-				evaluationRun.systemVersionId
+				evaluationRun.systemVersionId,
+				systemVersion.name,
+				systemVersion.versionNumber
 			);
 	}),
 });
