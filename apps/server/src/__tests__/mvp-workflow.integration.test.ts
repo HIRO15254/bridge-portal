@@ -254,6 +254,24 @@ describe("stored MVP workflow", () => {
 			verdict: "INDETERMINATE",
 		});
 		expect(corrected?.override?.createdAt).toBeInstanceOf(Date);
+		const previousRunId = correctedBoard.evaluationRun?.id;
+		await caller.boards.reevaluate({ boardId });
+		const reevaluatedBoard = await caller.boards.byId({ id: boardId });
+		expect(reevaluatedBoard.evaluationRun?.id).not.toBe(previousRunId);
+		expect(reevaluatedBoard.evaluationRun?.ruleEngineVersion).toBe(
+			RULE_ENGINE_VERSION
+		);
+		expect(reevaluatedBoard.evaluations).toHaveLength(22);
+		const historicEvaluation = await db.query.ruleEvaluation.findFirst({
+			where: (evaluation, { eq }) => eq(evaluation.id, automatic.id),
+			with: { override: true },
+		});
+		expect(historicEvaluation?.automaticVerdict).toBe(
+			automatic.automaticVerdict
+		);
+		expect(historicEvaluation?.override?.reason).toBe(
+			"実戦メモを確認して意図を訂正"
+		);
 
 		const stats = await caller.statistics.summary();
 		expect(

@@ -84,6 +84,45 @@ describe("priority evaluator boundaries", () => {
 		).toBe("COMPLIED");
 	});
 
+	it("leads the second-highest card with MUD from three or more small cards", () => {
+		const settings = {
+			...defaultSystemSettings,
+			lead: { ...defaultSystemSettings.lead, fromSmall: "MUD" as const },
+		};
+		const selectedVariants = {
+			"A-CA-01": ["MUD", "Honor sequence", "A from AK"],
+		};
+		for (const hand of ["987.432.AKQJ.432", "9876.43.AKQJ.432"]) {
+			const evaluationInput = input(hand, [], {
+				selectedVariants,
+				settings,
+			});
+			evaluationInput.deal.declarer = "E";
+			evaluationInput.play = [
+				{ card: "S8", index: 0, seat: "N", trickNumber: 1 },
+			];
+			expect(
+				evaluateOfficialItem("A-CA-01", evaluationInput).automaticVerdict
+			).toBe("COMPLIED");
+		}
+	});
+
+	it("defers the opener's Stayman continuation to the specific evaluator", () => {
+		const evaluationInput = input("AK32.AJ32.K32.32", [
+			["N", "1NT"],
+			["E", "PASS"],
+			["S", "2C"],
+			["W", "PASS"],
+			["N", "2H"],
+		]);
+		expect(
+			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+		expect(
+			evaluateOfficialItem("A-RR-02", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+	});
+
 	it("accepts Rule of 10 exactly and rejects nine", () => {
 		const settings = {
 			...defaultSystemSettings,
@@ -101,6 +140,40 @@ describe("priority evaluator boundaries", () => {
 				input("K98765.432.32.32", [["N", "2S"]], { settings })
 			).automaticVerdict
 		).toBe("DEVIATED_WRONG_APPLICATION");
+	});
+
+	it.each([
+		{
+			call: "2S",
+			hand: "KQJT98.A32.32.32",
+			specificRule: "A-RR-10" as const,
+		},
+		{
+			call: "4NT",
+			hand: "AKQJ.AKQ.432.32",
+			specificRule: "A-RR-06" as const,
+		},
+		{
+			call: "5NT",
+			hand: "AKQJ.AKQ.432.32",
+			specificRule: "A-RR-08" as const,
+		},
+	])("defers $call from the natural response evaluator to $specificRule", ({
+		call,
+		hand,
+		specificRule,
+	}) => {
+		const evaluationInput = input(hand, [
+			["S", "1H"],
+			["W", "PASS"],
+			["N", call],
+		]);
+		expect(
+			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+		expect(
+			evaluateOfficialItem(specificRule, evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
 	});
 
 	it("enforces the 20 HCP boundary for that Strong 2C definition", () => {

@@ -482,7 +482,7 @@ const boardsRouter = router({
 			}
 			const run = await ctx.db.query.evaluationRun.findFirst({
 				where: eq(evaluationRun.boardAttemptId, item.id),
-				orderBy: desc(evaluationRun.completedAt),
+				orderBy: [desc(evaluationRun.completedAt), desc(sql`rowid`)],
 			});
 			const evaluations = run
 				? await ctx.db.query.ruleEvaluation.findMany({
@@ -492,7 +492,7 @@ const boardsRouter = router({
 				: [];
 			const doubleDummy = await ctx.db.query.doubleDummyResult.findFirst({
 				where: eq(doubleDummyResult.boardAttemptId, item.id),
-				orderBy: desc(doubleDummyResult.createdAt),
+				orderBy: [desc(doubleDummyResult.createdAt), desc(sql`rowid`)],
 			});
 			return {
 				...item,

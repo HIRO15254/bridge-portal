@@ -477,7 +477,7 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 	const tournamentItem = board.tournamentRevision.tournament;
 	const doubleDummy = await db.query.doubleDummyResult.findFirst({
 		where: eq(doubleDummyResult.boardAttemptId, board.id),
-		orderBy: desc(doubleDummyResult.createdAt),
+		orderBy: [desc(doubleDummyResult.createdAt), desc(sql`rowid`)],
 	});
 	const player = await db.query.user.findFirst({
 		where: eq(user.id, session.user.id),

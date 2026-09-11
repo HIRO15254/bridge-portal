@@ -184,6 +184,23 @@ function assertSequentialIndexes(
 	}
 }
 
+function assertAuctionSeatOrder(
+	board: FunbridgeJsonFile["boards"][number]
+): void {
+	if (!board.auction) {
+		return;
+	}
+	const dealerIndex = seats.indexOf(board.dealer);
+	for (const action of board.auction) {
+		const expected = seats[(dealerIndex + action.index) % seats.length];
+		if (action.seat !== expected) {
+			throw new Error(
+				`BOARD_${board.boardNumber}_AUCTION_SEAT_ORDER_EXPECTED_${expected}_AT_${action.index}`
+			);
+		}
+	}
+}
+
 function assertValidDealAndPlay(
 	board: FunbridgeJsonFile["boards"][number]
 ): void {
@@ -274,6 +291,7 @@ export function parseFunbridgeJson(source: string): NormalizedFunbridgeImport {
 			`boards.${board.boardNumber}.auction`
 		);
 		assertSequentialIndexes(board.play, `boards.${board.boardNumber}.play`);
+		assertAuctionSeatOrder(board);
 		assertValidDealAndPlay(board);
 		if (!board.auction) {
 			warnings.push(`BOARD_${board.boardNumber}_AUCTION_MISSING`);

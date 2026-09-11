@@ -124,6 +124,14 @@ describe("Funbridge JSON import profile", () => {
 		);
 	});
 
+	it("rejects an auction whose seats do not rotate from the dealer", () => {
+		const raw = JSON.parse(fixture("funbridge-daily.json"));
+		raw.boards[0].auction[1].seat = "N";
+		expect(() => parseFunbridgeJson(JSON.stringify(raw))).toThrow(
+			"BOARD_3_AUCTION_SEAT_ORDER_EXPECTED_W_AT_1"
+		);
+	});
+
 	it("rejects an invalid 52-card deal", () => {
 		const raw = JSON.parse(fixture("funbridge-daily.json"));
 		raw.boards[0].hands.N = raw.boards[0].hands.E;

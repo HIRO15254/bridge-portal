@@ -306,6 +306,17 @@ function naturalResponseMinLength(bid: Bid): number {
 	return bid.strain === "H" || bid.strain === "S" ? 4 : 3;
 }
 
+function isJumpShift(openingBid: Bid, responseBid: Bid): boolean {
+	return (
+		responseBid.strain !== "NT" &&
+		responseBid.strain !== openingBid.strain &&
+		responseBid.level >=
+			openingBid.level +
+				1 +
+				(suitRank[responseBid.strain] <= suitRank[openingBid.strain] ? 1 : 0)
+	);
+}
+
 function naturalOpeningCandidate(
 	context: EvaluationContext
 ): string | undefined {
@@ -485,6 +496,66 @@ function responseContext(context: EvaluationContext) {
 		: undefined;
 }
 
+function isHighLevelConventionAsk(
+	context: EvaluationContext,
+	call: string
+): boolean {
+	if (call === "4NT") {
+		return hasVariant(context, "A-RR-06", "Blackwood");
+	}
+	if (call !== "5NT") {
+		return false;
+	}
+	return (
+		hasVariant(context, "A-RR-06", "5NT king ask") ||
+		hasVariant(context, "A-RR-08", "Grand Slam Force")
+	);
+}
+
+function isGerberAsk(context: EvaluationContext, call: string): boolean {
+	return (
+		(call === "4C" && hasVariant(context, "A-RR-07", "4C ace ask")) ||
+		(call === "5C" && hasVariant(context, "A-RR-07", "5C king ask"))
+	);
+}
+
+function isWeakTwoInquiryAsk(
+	context: EvaluationContext,
+	openingBid: Bid,
+	partnerCall: string
+): boolean {
+	if (partnerCall !== "2NT" || openingBid.level !== 2) {
+		return false;
+	}
+	const openingAgreement = naturalOpeningAgreement(context, openingBid);
+	return Boolean(
+		openingAgreement?.adopted &&
+			openingAgreement.valid &&
+			(context.system.selectedVariants["A-RR-05"] ?? []).some((variant) =>
+				["Feature ask", "Ogust-style ask"].includes(variant)
+			)
+	);
+}
+
+function isSpecificResponderConvention(
+	context: EvaluationContext,
+	call: string,
+	partnerRebidCall: string,
+	partnerRebidBid: Bid | undefined
+): boolean {
+	const heroGerberAsk =
+		(call === "4C" &&
+			partnerRebidBid?.strain === "NT" &&
+			hasVariant(context, "A-RR-07", "4C ace ask")) ||
+		(call === "5C" && hasVariant(context, "A-RR-07", "5C king ask"));
+	return (
+		isHighLevelConventionAsk(context, call) ||
+		isHighLevelConventionAsk(context, partnerRebidCall) ||
+		heroGerberAsk ||
+		isGerberAsk(context, partnerRebidCall)
+	);
+}
+
 function evaluateNaturalOpenerRebid(
 	rule: RuleDefinition,
 	context: EvaluationContext
@@ -504,8 +575,16 @@ function evaluateNaturalOpenerRebid(
 	const action = partnerAction
 		? heroCallAfter(context, partnerAction.index)
 		: undefined;
-	if (!action) {
+	if (!(partnerAction && action)) {
 		return;
+	}
+	const partnerCall = normalizeCall(partnerAction.call);
+	const specificAsk =
+		(openingBid.strain === "NT" && ["2C", "4C", "5C"].includes(partnerCall)) ||
+		isHighLevelConventionAsk(context, partnerCall) ||
+		isWeakTwoInquiryAsk(context, openingBid, partnerCall);
+	if (specificAsk) {
+		return notApplicable(rule, "MORE_SPECIFIC_CONVENTION_APPLIES");
 	}
 	const call = normalizeCall(action.call);
 	if (call === "PASS") {
@@ -586,10 +665,13 @@ function evaluateNaturalResponderRebid(
 	}
 
 	const partnerRebidBid = parseBid(partnerRebid.call);
-	const isSpecificConvention =
-		call === "4NT" ||
-		call === "5NT" ||
-		(call === "4C" && partnerRebidBid?.strain === "NT");
+	const partnerRebidCall = normalizeCall(partnerRebid.call);
+	const isSpecificConvention = isSpecificResponderConvention(
+		context,
+		call,
+		partnerRebidCall,
+		partnerRebidBid
+	);
 	if (isSpecificConvention) {
 		return notApplicable(rule, "MORE_SPECIFIC_CONVENTION_APPLIES");
 	}
@@ -664,7 +746,16 @@ function evaluateNaturalResponse(
 	const conventional =
 		(response.openingBid.strain === "NT" &&
 			["2C", "4C", "5C"].includes(call)) ||
-		(response.openingBid.level === 2 && ["2D", "2NT"].includes(call));
+		(response.openingBid.level === 2 && ["2D", "2NT"].includes(call)) ||
+		(call === "4NT" && hasVariant(context, "A-RR-06", "Blackwood")) ||
+		(call === "5NT" &&
+			(hasVariant(context, "A-RR-06", "5NT king ask") ||
+				hasVariant(context, "A-RR-08", "Grand Slam Force"))) ||
+		Boolean(
+			bid &&
+				hasVariant(context, "A-RR-10", "Fit-showing jump") &&
+				isJumpShift(response.openingBid, bid)
+		);
 	if (conventional) {
 		return notApplicable(rule, "MORE_SPECIFIC_CONVENTION_APPLIES");
 	}
@@ -1548,15 +1639,7 @@ function evaluateFitShowingJump(
 	const bid = parseBid(call);
 	const openingBid = response.openingBid;
 	const openingStrain = openingBid.strain as "C" | "D" | "H" | "S";
-	const isJump = Boolean(
-		bid &&
-			bid.strain !== "NT" &&
-			bid.strain !== openingStrain &&
-			bid.level >=
-				openingBid.level +
-					1 +
-					(suitRank[bid.strain] <= suitRank[openingStrain] ? 1 : 0)
-	);
+	const isJump = Boolean(bid && isJumpShift(openingBid, bid));
 	const support = context.lengths[openingStrain];
 	const jumpLength =
 		bid && bid.strain !== "NT" ? context.lengths[bid.strain] : 0;
@@ -2078,10 +2161,7 @@ function expectedLeadRank(
 	) {
 		return holding[0];
 	}
-	if (
-		context.system.settings.lead.fromSmall === "MUD" &&
-		holding.length === 3
-	) {
+	if (context.system.settings.lead.fromSmall === "MUD" && holding.length >= 3) {
 		return holding[1];
 	}
 	return;
