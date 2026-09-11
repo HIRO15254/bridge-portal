@@ -152,14 +152,73 @@ describe("stored MVP workflow", () => {
 		);
 		expect(imported.status).toBe(201);
 		const importedBody = (await imported.json()) as {
+			revisionNumber: number;
 			tournamentId: string;
 		};
+		expect(importedBody.revisionNumber).toBe(1);
+
+		const duplicateForm = new FormData();
+		duplicateForm.set(
+			"file",
+			new File([source], "daily-duplicate.json", {
+				type: "application/json",
+			})
+		);
+		const duplicate = await app.request(
+			"/api/imports/funbridge-json",
+			{
+				body: duplicateForm,
+				headers: { Cookie: cookie, Origin: bindingsConfig.CORS_ORIGIN },
+				method: "POST",
+			},
+			bindings
+		);
+		expect(duplicate.status).toBe(200);
+		await expect(duplicate.json()).resolves.toMatchObject({
+			duplicate: true,
+			tournamentId: importedBody.tournamentId,
+		});
+
+		const updatedJson = JSON.parse(source) as {
+			boards: Array<{ score?: number }>;
+			tournament: { score?: number };
+		};
+		updatedJson.tournament.score = 55.5;
+		if (updatedJson.boards[0]) {
+			updatedJson.boards[0].score = 60.25;
+		}
+		const updatedForm = new FormData();
+		updatedForm.set(
+			"file",
+			new File([JSON.stringify(updatedJson)], "daily-updated.json", {
+				type: "application/json",
+			})
+		);
+		const updated = await app.request(
+			"/api/imports/funbridge-json",
+			{
+				body: updatedForm,
+				headers: { Cookie: cookie, Origin: bindingsConfig.CORS_ORIGIN },
+				method: "POST",
+			},
+			bindings
+		);
+		expect(updated.status).toBe(201);
+		await expect(updated.json()).resolves.toMatchObject({
+			duplicate: false,
+			revisionNumber: 2,
+			tournamentId: importedBody.tournamentId,
+		});
+
 		const importedTournament = await caller.tournaments.byId({
 			id: importedBody.tournamentId,
 		});
+		expect(importedTournament.revisions).toHaveLength(2);
 		const activeRevision = importedTournament.revisions.find(
 			(revision) => revision.id === importedTournament.activeRevisionId
 		);
+		expect(activeRevision?.revisionNumber).toBe(2);
+		expect(activeRevision?.tournamentScore).toBe(55.5);
 		expect(activeRevision?.boards).toHaveLength(1);
 		const boardId = activeRevision?.boards[0]?.id;
 		if (!boardId) {
@@ -196,7 +255,7 @@ describe("stored MVP workflow", () => {
 		);
 
 		const storedObjects = await bindings.RAW_IMPORTS.list();
-		expect(storedObjects.objects).toHaveLength(1);
+		expect(storedObjects.objects).toHaveLength(2);
 		const storedObject = await bindings.RAW_IMPORTS.head(
 			storedObjects.objects[0]?.key ?? ""
 		);

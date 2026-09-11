@@ -15,7 +15,7 @@ export default defineConfig({
 			manifest: {
 				name: "Bridge Portal",
 				short_name: "Bridge Portal",
-				description: "A Cloudflare-ready TypeScript application template",
+				description: "Funbridge実戦とJCBLリストAを結ぶ個人学習ポータル",
 				theme_color: "#171717",
 			},
 			pwaAssets: { disabled: false, config: true },

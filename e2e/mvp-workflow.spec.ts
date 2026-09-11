@@ -7,6 +7,8 @@ const tournamentPattern = /Daily example/;
 const boardPattern = /BOARD 1/;
 const openingRulePattern = /A-OB-01@2026-05-01/;
 const relatedBoardPattern = /Daily example · Board 1/;
+const parPattern = /^Par /;
+const actualContractMaximumPattern = /^実Contract最大 /;
 const admin = {
 	email: "learner@example.test",
 	funbridgeId: "replace-with-your-funbridge-id",
@@ -68,6 +70,15 @@ test("Rule学習から実戦Boardへの往復まで完走する", async ({ page,
 		page.getByRole("heading", { name: "22項目の判定" })
 	).toBeVisible();
 	await expect(page.locator(".evaluation-list article")).toHaveCount(22);
+
+	await page.getByRole("button", { name: "DDSで解析" }).click();
+	await expect(
+		page.getByRole("button", { name: "解析を保存しました" })
+	).toBeVisible({ timeout: 30_000 });
+	await expect(page.locator(".dd-panel").getByText(parPattern)).toBeVisible();
+	await expect(
+		page.locator(".dd-panel").getByText(actualContractMaximumPattern)
+	).toBeVisible();
 
 	await page.getByRole("button", { name: "進む" }).click();
 	await expect(page.locator(".trick-grid").getByText("S9")).toBeVisible();

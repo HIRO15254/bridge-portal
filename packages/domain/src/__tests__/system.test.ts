@@ -145,7 +145,7 @@ describe("rule template resolution", () => {
 				{
 					condition: { auction: "competitive" },
 					officialItemId: "test",
-					priority: 10,
+					priority: 100,
 					templateId: "general",
 					variant: "general",
 				},
@@ -161,6 +161,30 @@ describe("rule template resolution", () => {
 		);
 
 		expect(winner?.templateId).toBe("specific");
+	});
+
+	it("uses code priority only after auction specificity", () => {
+		const winner = resolveRuleTemplate(
+			[
+				{
+					condition: { auction: "competitive", level: 2 },
+					officialItemId: "test",
+					priority: 10,
+					templateId: "lower-priority-specific",
+					variant: "specific",
+				},
+				{
+					condition: { auction: "competitive", level: 2 },
+					officialItemId: "test",
+					priority: 20,
+					templateId: "higher-priority-specific",
+					variant: "specific-priority",
+				},
+			],
+			{ auction: "competitive", level: 2 }
+		);
+
+		expect(winner?.templateId).toBe("higher-priority-specific");
 	});
 
 	it("rejects an unresolved equal-specificity tie", () => {

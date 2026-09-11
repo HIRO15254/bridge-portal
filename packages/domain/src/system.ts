@@ -175,11 +175,9 @@ export function resolveRuleTemplate(
 		return;
 	}
 	const ordered = [...matches].sort((left, right) => {
-		const priority = right.priority - left.priority;
-		return (
-			priority ||
-			Object.keys(right.condition).length - Object.keys(left.condition).length
-		);
+		const specificity =
+			Object.keys(right.condition).length - Object.keys(left.condition).length;
+		return specificity || right.priority - left.priority;
 	});
 	const winner = ordered[0];
 	const runnerUp = ordered[1];
