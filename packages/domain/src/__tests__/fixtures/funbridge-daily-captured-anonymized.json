@@ -1,0 +1,87 @@
+{
+  "format": "FUNBRIDGE_EXPORT",
+  "formatVersion": 1,
+  "tournament": {
+    "id": "captured-daily-anonymized",
+    "family": "DAILY",
+    "name": "Daily Tournament (anonymized capture)",
+    "funbridgeId": "captured-user-redacted",
+    "playedAt": "2026-04-24T00:00:00+09:00",
+    "completion": "COMPLETED",
+    "boardCount": 1,
+    "scoreType": "MP",
+    "daily": {
+      "region": "ASIA_OCEANIA"
+    }
+  },
+  "boards": [
+    {
+      "boardNumber": 1,
+      "dealer": "S",
+      "vulnerability": "Both",
+      "hands": {
+        "N": "8742.T5.KJ3.Q953",
+        "E": "T3.KJ93.T976.AJ2",
+        "S": "AKJ965.AQ62.A8.6",
+        "W": "Q.874.Q542.KT874"
+      },
+      "heroSeat": "S",
+      "contract": "4S",
+      "declarer": "S",
+      "result": 0,
+      "score": 5.91,
+      "auction": [
+        { "index": 0, "seat": "S", "call": "1S" },
+        { "index": 1, "seat": "W", "call": "PASS" },
+        { "index": 2, "seat": "N", "call": "2S" },
+        { "index": 3, "seat": "E", "call": "PASS" },
+        { "index": 4, "seat": "S", "call": "4S" },
+        { "index": 5, "seat": "W", "call": "PASS" },
+        { "index": 6, "seat": "N", "call": "PASS" },
+        { "index": 7, "seat": "E", "call": "PASS" }
+      ],
+      "play": [
+        { "index": 0, "trickNumber": 1, "seat": "W", "card": "H4" },
+        { "index": 1, "trickNumber": 1, "seat": "N", "card": "H5" },
+        { "index": 2, "trickNumber": 1, "seat": "E", "card": "H9" },
+        { "index": 3, "trickNumber": 1, "seat": "S", "card": "HA" },
+        { "index": 4, "trickNumber": 2, "seat": "S", "card": "S5" },
+        { "index": 5, "trickNumber": 2, "seat": "W", "card": "SQ" },
+        { "index": 6, "trickNumber": 2, "seat": "N", "card": "S2" },
+        { "index": 7, "trickNumber": 2, "seat": "E", "card": "S3" },
+        { "index": 8, "trickNumber": 3, "seat": "W", "card": "H8" },
+        { "index": 9, "trickNumber": 3, "seat": "N", "card": "HT" },
+        { "index": 10, "trickNumber": 3, "seat": "E", "card": "HK" },
+        { "index": 11, "trickNumber": 3, "seat": "S", "card": "H2" },
+        { "index": 12, "trickNumber": 4, "seat": "E", "card": "C2" },
+        { "index": 13, "trickNumber": 4, "seat": "S", "card": "C6" },
+        { "index": 14, "trickNumber": 4, "seat": "W", "card": "CK" },
+        { "index": 15, "trickNumber": 4, "seat": "N", "card": "C3" },
+        { "index": 16, "trickNumber": 5, "seat": "W", "card": "C7" },
+        { "index": 17, "trickNumber": 5, "seat": "N", "card": "C5" },
+        { "index": 18, "trickNumber": 5, "seat": "E", "card": "CJ" },
+        { "index": 19, "trickNumber": 5, "seat": "S", "card": "S6" },
+        { "index": 20, "trickNumber": 6, "seat": "S", "card": "HQ" },
+        { "index": 21, "trickNumber": 6, "seat": "W", "card": "H7" },
+        { "index": 22, "trickNumber": 6, "seat": "N", "card": "S4" },
+        { "index": 23, "trickNumber": 6, "seat": "E", "card": "H3" },
+        { "index": 24, "trickNumber": 7, "seat": "N", "card": "C9" },
+        { "index": 25, "trickNumber": 7, "seat": "E", "card": "CA" },
+        { "index": 26, "trickNumber": 7, "seat": "S", "card": "S9" },
+        { "index": 27, "trickNumber": 7, "seat": "W", "card": "C4" },
+        { "index": 28, "trickNumber": 8, "seat": "S", "card": "H6" },
+        { "index": 29, "trickNumber": 8, "seat": "W", "card": "D2" },
+        { "index": 30, "trickNumber": 8, "seat": "N", "card": "S7" },
+        { "index": 31, "trickNumber": 8, "seat": "E", "card": "HJ" },
+        { "index": 32, "trickNumber": 9, "seat": "N", "card": "DK" },
+        { "index": 33, "trickNumber": 9, "seat": "E", "card": "D7" },
+        { "index": 34, "trickNumber": 9, "seat": "S", "card": "D8" },
+        { "index": 35, "trickNumber": 9, "seat": "W", "card": "D4" },
+        { "index": 36, "trickNumber": 10, "seat": "N", "card": "D3" },
+        { "index": 37, "trickNumber": 10, "seat": "E", "card": "D6" },
+        { "index": 38, "trickNumber": 10, "seat": "S", "card": "DA" },
+        { "index": 39, "trickNumber": 10, "seat": "W", "card": "D5" }
+      ]
+    }
+  ]
+}

@@ -4,7 +4,9 @@ import { dealToPbn, parseFunbridgeJson } from "../funbridge";
 import bpCircuitFixture from "./fixtures/funbridge-bp-circuit.json";
 import capturedBpCircuitFixture from "./fixtures/funbridge-bp-circuit-captured-anonymized.json";
 import dailyFixture from "./fixtures/funbridge-daily.json";
+import capturedDailyFixture from "./fixtures/funbridge-daily-captured-anonymized.json";
 import seriesFixture from "./fixtures/funbridge-series.json";
+import capturedSeriesFixture from "./fixtures/funbridge-series-captured-anonymized.json";
 
 function fixture(name: string): string {
 	const fixtures: Record<string, unknown> = {
@@ -73,6 +75,39 @@ describe("Funbridge JSON import profile", () => {
 			seat: "W",
 			trickNumber: 13,
 		});
+	});
+
+	it("normalizes an anonymized Series capture with a complete legal play", () => {
+		const parsed = parseFunbridgeJson(JSON.stringify(capturedSeriesFixture));
+		const board = parsed.boards[0];
+
+		expect(parsed.family).toBe("SERIES");
+		expect(parsed.familyMetadata).toEqual({
+			level: "SERIES_11",
+			outcome: "PENDING",
+			period: "2026-09-01/2026-09-16",
+		});
+		expect(parsed.warnings).toEqual([]);
+		expect(board?.playComplete).toBe(true);
+		expect(board?.deal.contract).toBe("3NT");
+		expect(board?.deal.declarer).toBe("E");
+		expect(board?.deal.result).toBe(0);
+		expect(board?.score).toBe(80.21);
+		expect(board?.play).toHaveLength(52);
+	});
+
+	it("retains an anonymized Daily capture that ended after ten tricks", () => {
+		const parsed = parseFunbridgeJson(JSON.stringify(capturedDailyFixture));
+		const board = parsed.boards[0];
+
+		expect(parsed.family).toBe("DAILY");
+		expect(parsed.familyMetadata).toEqual({ region: "ASIA_OCEANIA" });
+		expect(parsed.warnings).toEqual(["BOARD_1_PLAY_INCOMPLETE"]);
+		expect(board?.playComplete).toBe(false);
+		expect(board?.play).toHaveLength(40);
+		expect(board?.deal.contract).toBe("4S");
+		expect(board?.deal.result).toBe(0);
+		expect(board?.score).toBe(5.91);
 	});
 
 	it("rejects a family without its required metadata", () => {
