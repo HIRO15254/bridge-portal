@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import { app } from "../worker";
 
 const bindings = {
+	BETTER_AUTH_SECRET: "test-secret-that-is-at-least-thirty-two-characters",
+	BETTER_AUTH_URL: "https://api.example.test",
+	BOOTSTRAP_TOKEN: "test-bootstrap-token-at-least-thirty-two-characters",
 	CORS_ORIGIN: "https://web.example.test",
 	DB: {} as D1Database,
+	RAW_IMPORTS: {} as R2Bucket,
 };
 
 describe("worker", () => {

@@ -80,5 +80,15 @@
       "tailwindDirectives": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/web/src/routes/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": { "useFilenamingConvention": "off" }
+        }
+      }
+    }
+  ],
   "extends": ["ultracite/biome/core", "ultracite/biome/react"]
 }

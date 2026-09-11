@@ -1,59 +1,50 @@
 # Bridge Portal
 
-A deliberately small full-stack starter for Cloudflare: React on Pages, a Hono/tRPC Worker, and an initially empty D1 database.
+Funbridgeの実戦と2026年5月1日施行のJCBL「リストA」を結ぶ、単一ユーザー向け学習ポータルです。
 
-[日本語](./README.ja.md)
+## MVP workflow
 
-## Create a project
+1. `Rules`でリストAの全22大項目を学ぶ
+2. `My Systems`でRule・Variant・Natural call設定を選び、不変のSystem Versionを公開する
+3. Funbridge情報をカスタムタグに含むPBN 2.1を取り込む
+4. 本人のCall／Lead／Signalについて全22評価器を実行する
+5. Board Detailと`Statistics`からルールと実戦を往復する
 
-Clone this repository, then initialize its names before adding application code:
-
-```sh
-bun install --frozen-lockfile
-bun run template:init -- my-app --display-name "My App"
-```
-
-The slug must be kebab-case. Initialization updates the workspace scope, imports, PWA metadata, Worker, Pages and D1 resource names, and these README files. It does not create Cloudflare resources, assign a D1 UUID, or change Git remotes. Use `--dry-run` to preview changes. Initialization refuses a second run.
-
-## What is included
-
-- React 19, Vite, TanStack Router and Query, tRPC, Tailwind CSS, shadcn/ui, and PWA support
-- Hono on Cloudflare Workers
-- Drizzle ORM with an empty D1 schema and migration directory
-- Runtime contracts limited to `DB`, `CORS_ORIGIN`, and `VITE_SERVER_URL`
-- Split Vitest projects, coverage, and test-discovery validation
-- CI for pull requests to `master`, production deployment from `master`, and same-repository PR previews
-
-The browser route `/` reports whether the tRPC API is reachable. The Worker route `/` and tRPC `healthCheck` both return `OK`.
+PBN原文はPrivate R2へSHA-256で冪等保存し、D1にはTournament、Revision、Deal、Auction、Play、Score、評価Runを正規化します。不完全なAuction／Playも受け付け、客観的に判断できない評価は理由付き`INDETERMINATE`になります。DDSはブラウザーのWeb Workerでオンデマンド実行します。
 
 ## Development
 
 ```sh
-cp apps/web/.env.example apps/web/.env.local
+bun install --frozen-lockfile
 bun run cf:typegen
 bun run db:migrate:local
 bun run dev
 ```
 
-Common checks:
+検証コマンド:
 
 ```sh
 bun run check-types
 bun run check
 bun run test
-bun run test:coverage
 bun run check:test-discovery
 bun run build
 ```
 
-See [the deployment guide](./docs/deploy.md) for Cloudflare setup, production delivery, and preview database behavior.
+## One-time admin bootstrap
 
-## Bundled setup skill
+公開登録とOAuthは無効です。Workerへ`BETTER_AUTH_SECRET`と一時的な`BOOTSTRAP_TOKEN`をSecretとして設定し、次の環境変数をローカルシェルへ設定して一度だけ実行します。
 
-Repository-aware Codex installations can use the bundled `$better-t-app-setup` skill in [`.agents/skills`](./.agents/skills/better-t-app-setup/SKILL.md). Ask it to initialize the project name, prepare or verify the Cloudflare D1/Worker/Pages environment, configure the required GitHub settings with the CLI, or run deployment preflight checks. It treats remote resource creation, repository setting changes, migrations, and deployment as explicit operations rather than side effects of inspection.
+```sh
+bun run auth:bootstrap
+```
 
-## Template policy
+必要な環境変数は`BRIDGE_PORTAL_API_URL`、`BRIDGE_PORTAL_BOOTSTRAP_TOKEN`、`BRIDGE_PORTAL_ADMIN_EMAIL`、`BRIDGE_PORTAL_ADMIN_NAME`、`BRIDGE_PORTAL_ADMIN_PASSWORD`です。任意で`BRIDGE_PORTAL_FUNBRIDGE_ID`も指定できます。作成後はCloudflareから`BOOTSTRAP_TOKEN`を削除してください。2人目以降の作成はサーバー側でも拒否されます。
 
-This template is derived manually from the development, testing, and Cloudflare operating foundations of [Sapphire2](https://github.com/HIRO15254/sapphire2). Product behavior and identity are intentionally excluded: authentication, MCP and AI integrations, poker and other domain features, product branding, Linear automation, and dev/release branch conventions are not part of this repository.
+## PBN custom tags
 
-Upstream improvements are evaluated and ported manually. This repository does not pin a Sapphire2 commit and does not automatically synchronize with it.
+大会単位で最低限、`FunbridgeTournamentId`、`FunbridgeTournamentFamily`（`BP_CIRCUIT` / `DAILY` / `SERIES`）、`FunbridgePlayerId`、`FunbridgePlayedAt`、`FunbridgeCompletion`、`FunbridgeBoardCount`、`FunbridgeTournamentScore`、`FunbridgeRank`、`FunbridgeParticipantCount`を使用します。`FunbridgeScoreType`（`MP` / `IMP`）とFamily固有タグも利用できます。
+
+## Deployment
+
+Cloudflare Worker、D1、Private R2、PagesとGitHub Actionsを使用します。詳しい運用手順は[deployment guide](./docs/deploy.md)を参照してください。テンプレート由来の初期化・preflightには同梱の[`better-t-app-setup`](./.agents/skills/better-t-app-setup/SKILL.md)を使用します。

@@ -1,0 +1,5 @@
+{
+  "extends": "@bridge-portal/config/tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "lib": ["ESNext", "DOM"] },
+  "include": ["src"]
+}

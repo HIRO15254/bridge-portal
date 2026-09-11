@@ -27,6 +27,7 @@ jobs:
           echo "worker=${app_slug}-api-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "pages=${app_slug}" >> "$GITHUB_OUTPUT"
           echo "db=${app_slug}-db-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "r2=${app_slug}-raw-imports-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
       - name: Delete Worker
         env:
           WORKER: ${{ steps.vars.outputs.worker }}
@@ -76,6 +77,10 @@ jobs:
               exit 1
             }
           fi
+      - name: Delete preview R2
+        env:
+          R2_NAME: ${{ steps.vars.outputs.r2 }}
+        run: bunx wrangler r2 bucket delete "$R2_NAME" || true
       - uses: peter-evans/find-comment@v3
         id: find
         with:

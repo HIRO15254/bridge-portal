@@ -74,8 +74,9 @@ jobs:
       - name: Deploy Worker
         working-directory: apps/server
         env:
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
           PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
-        run: bunx wrangler deploy --var "CORS_ORIGIN:${PRODUCTION_WEB_URL}"
+        run: bunx wrangler deploy --var "CORS_ORIGIN:${PRODUCTION_WEB_URL}" --var "BETTER_AUTH_URL:${PRODUCTION_API_URL}"
 
   deploy-web:
     needs: deploy-api

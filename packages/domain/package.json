@@ -1,0 +1,20 @@
+{
+  "name": "@bridge-portal/domain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@bridge-portal/config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "4.1.2"
+  }
+}

@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/performance/noBarrelFile: This package intentionally exposes one typed database boundary. */
 import {
 	type AnyD1Database,
 	type DrizzleD1Database,
@@ -5,6 +6,8 @@ import {
 } from "drizzle-orm/d1";
 
 import { schema } from "./schema";
+
+export * from "./schema";
 
 export type D1Database = AnyD1Database;
 export type Database = DrizzleD1Database<typeof schema> & {

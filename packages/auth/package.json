@@ -1,0 +1,20 @@
+{
+  "name": "@bridge-portal/auth",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bridge-portal/db": "workspace:*",
+    "better-auth": "1.6.0",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@bridge-portal/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

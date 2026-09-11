@@ -1,0 +1,7 @@
+{
+  "extends": "@bridge-portal/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

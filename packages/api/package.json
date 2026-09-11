@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "@bridge-portal/db": "workspace:*",
-    "@trpc/server": "catalog:"
+    "@bridge-portal/domain": "workspace:*",
+    "@trpc/server": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@bridge-portal/config": "workspace:*",

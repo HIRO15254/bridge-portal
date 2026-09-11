@@ -27,6 +27,7 @@
     "db:migrate:local": "bun scripts/d1-migrate.ts local",
     "db:migrate:remote": "bun scripts/d1-migrate.ts remote",
     "db:studio": "bun run --filter @bridge-portal/db db:studio",
+    "auth:bootstrap": "bun scripts/bootstrap-admin.ts",
     "cf:typegen": "bunx wrangler types apps/server/worker-configuration.d.ts -c apps/server/wrangler.jsonc",
     "cf:typegen:check": "bunx wrangler types apps/server/worker-configuration.d.ts --check -c apps/server/wrangler.jsonc",
     "test": "vitest run",
@@ -49,7 +50,7 @@
     "typescript": "catalog:",
     "ultracite": "7.4.3",
     "vitest": "4.1.2",
-    "wrangler": "4.80.0"
+    "wrangler": "4.131.0"
   },
   "engines": {
     "node": ">=22.19.0",

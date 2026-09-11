@@ -10,15 +10,19 @@
   },
   "dependencies": {
     "@bridge-portal/api": "workspace:*",
+    "@bridge-portal/auth": "workspace:*",
     "@bridge-portal/db": "workspace:*",
+    "@bridge-portal/domain": "workspace:*",
+    "@bridge-portal/env": "workspace:*",
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "catalog:",
+    "drizzle-orm": "catalog:",
     "hono": "catalog:"
   },
   "devDependencies": {
     "@bridge-portal/config": "workspace:*",
     "typescript": "catalog:",
     "vitest": "4.1.2",
-    "wrangler": "4.80.0"
+    "wrangler": "4.131.0"
   }
 }

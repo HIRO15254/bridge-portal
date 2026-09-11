@@ -24,6 +24,7 @@ jobs:
       web_url: ${{ steps.vars.outputs.web_url }}
       pages_project: ${{ steps.vars.outputs.pages_project }}
       worker_name: ${{ steps.vars.outputs.worker_name }}
+      r2_name: ${{ steps.vars.outputs.r2_name }}
     steps:
       - uses: actions/checkout@v5
       - name: Resolve preview names and URLs
@@ -35,6 +36,7 @@ jobs:
           worker_name="${app_slug}-api-pr-${PR_NUMBER}"
           pages_project="$app_slug"
           db_name="${app_slug}-db-pr-${PR_NUMBER}"
+          r2_name="${app_slug}-raw-imports-pr-${PR_NUMBER}"
           workers_subdomain=$(curl -sf \
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" | jq -r '.result.subdomain')
@@ -44,6 +46,7 @@ jobs:
           echo "worker_name=${worker_name}" >> "$GITHUB_OUTPUT"
           echo "pages_project=${pages_project}" >> "$GITHUB_OUTPUT"
           echo "db_name=${db_name}" >> "$GITHUB_OUTPUT"
+          echo "r2_name=${r2_name}" >> "$GITHUB_OUTPUT"
           echo "api_url=https://${worker_name}.${workers_subdomain}.workers.dev" >> "$GITHUB_OUTPUT"
           echo "web_url=https://pr-${PR_NUMBER}.${pages_domain}" >> "$GITHUB_OUTPUT"
 
@@ -80,8 +83,25 @@ jobs:
           echo "database_id=${database_id}" >> "$GITHUB_OUTPUT"
           echo "is_new=${is_new}" >> "$GITHUB_OUTPUT"
 
+  r2:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - name: Resolve or create preview R2
+        env:
+          R2_NAME: ${{ needs.setup.outputs.r2_name }}
+        run: bunx wrangler r2 bucket info "$R2_NAME" || bunx wrangler r2 bucket create "$R2_NAME"
+
   prepare-database:
-    needs: [setup, d1]
+    needs: [setup, d1, r2]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -99,7 +119,8 @@ jobs:
         run: |
           cp apps/server/wrangler.jsonc /tmp/production-wrangler.jsonc
           jq --arg id "$DB_ID" --arg name "$DB_NAME" \
-            '.d1_databases[0].database_id = $id | .d1_databases[0].database_name = $name' \
+            --arg bucket "${{ needs.setup.outputs.r2_name }}" \
+            '.d1_databases[0].database_id = $id | .d1_databases[0].database_name = $name | .r2_buckets[0].bucket_name = $bucket | del(.r2_buckets[0].preview_bucket_name)' \
             apps/server/wrangler.jsonc > /tmp/preview-wrangler.jsonc
           mv /tmp/preview-wrangler.jsonc apps/server/wrangler.jsonc
       - name: Seed new preview from production and apply branch migrations
@@ -175,9 +196,13 @@ jobs:
       - name: Deploy preview Worker
         working-directory: apps/server
         env:
+          AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           WEB_URL: ${{ needs.setup.outputs.web_url }}
+          API_URL: ${{ needs.setup.outputs.api_url }}
           WORKER_NAME: ${{ needs.setup.outputs.worker_name }}
-        run: bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}"
+        run: |
+          bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}" --var "BETTER_AUTH_URL:${API_URL}"
+          printf '%s' "$AUTH_SECRET" | bunx wrangler secret put BETTER_AUTH_SECRET --name "$WORKER_NAME"
 
   deploy-web:
     needs: [setup, deploy-api]

@@ -12,6 +12,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@bridge-portal/domain": "workspace:*",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
