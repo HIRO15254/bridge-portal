@@ -309,6 +309,33 @@ describe("priority evaluator boundaries", () => {
 		).toBe("NOT_APPLICABLE");
 	});
 
+	it("uses the legal overcall level when detecting a missed opportunity", () => {
+		const hand = "32.KQJT9.Q32.432";
+		const afterOneSpade = input(hand, [
+			["E", "1S"],
+			["S", "PASS"],
+			["W", "PASS"],
+			["N", "PASS"],
+		]);
+		const afterOneDiamond = input(hand, [
+			["E", "1D"],
+			["S", "PASS"],
+			["W", "PASS"],
+			["N", "PASS"],
+		]);
+
+		expect(
+			evaluateOfficialItem("A-CD-01", afterOneSpade).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+		const oneLevelMiss = evaluateOfficialItem("A-CD-01", afterOneDiamond);
+		expect(oneLevelMiss.automaticVerdict).toBe("DEVIATED_MISSED_OPPORTUNITY");
+		expect(oneLevelMiss.facts).toMatchObject({
+			minimumHcp: 8,
+			targetCall: "1H",
+			variant: "One-level",
+		});
+	});
+
 	it("evaluates the responder's natural rebid with its typed agreement", () => {
 		const auction: [Seat, string][] = [
 			["S", "1C"],

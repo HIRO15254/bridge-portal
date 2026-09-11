@@ -1709,6 +1709,17 @@ function opponentOpening(context: EvaluationContext): AuctionCall | undefined {
 		: undefined;
 }
 
+function lowestLegalSuitBidLevel(
+	opening: Bid,
+	strain: "C" | "D" | "H" | "S"
+): number | undefined {
+	const level =
+		suitRank[strain] > suitRank[opening.strain]
+			? opening.level
+			: opening.level + 1;
+	return level <= 7 ? level : undefined;
+}
+
 function evaluateNaturalOvercall(
 	rule: RuleDefinition,
 	context: EvaluationContext
@@ -1751,18 +1762,48 @@ function evaluateNaturalOvercall(
 					action
 				);
 	}
-	const candidate = (["S", "H", "D", "C"] as const).find(
-		(suit) =>
-			context.lengths[suit] >=
-			context.system.settings.overcall.oneLevelMinLength
-	);
-	return call === "PASS" &&
-		candidate &&
-		context.points >= context.system.settings.overcall.oneLevelMinHcp
+	const candidate = openingBid
+		? (["S", "H", "D", "C"] as const)
+				.map((strain) => {
+					const level = lowestLegalSuitBidLevel(openingBid, strain);
+					const variant = level === 1 ? "One-level" : "Two-level";
+					const minimumHcp =
+						level === 1
+							? context.system.settings.overcall.oneLevelMinHcp
+							: context.system.settings.overcall.twoLevelMinHcp;
+					const minimumLength =
+						level === 1
+							? context.system.settings.overcall.oneLevelMinLength
+							: context.system.settings.overcall.twoLevelMinLength;
+					return {
+						level,
+						minimumHcp,
+						minimumLength,
+						strain,
+						variant,
+					};
+				})
+				.find(
+					(option) =>
+						option.level !== undefined &&
+						option.strain !== openingBid.strain &&
+						hasVariant(context, "A-CD-01", option.variant) &&
+						context.points >= option.minimumHcp &&
+						context.lengths[option.strain] >= option.minimumLength
+				)
+		: undefined;
+	return call === "PASS" && candidate
 		? missed(
 				rule,
 				"NATURAL_OVERCALL_MISSED",
-				{ hcp: context.points, targetSuit: candidate },
+				{
+					hcp: context.points,
+					minimumHcp: candidate.minimumHcp,
+					minimumLength: candidate.minimumLength,
+					targetCall: `${candidate.level}${candidate.strain}`,
+					targetSuit: candidate.strain,
+					variant: candidate.variant,
+				},
 				action
 			)
 		: notApplicable(rule);
