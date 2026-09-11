@@ -6,6 +6,7 @@ import {
 	Outlet,
 } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { authClient } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
@@ -87,9 +88,9 @@ function Login() {
 					/>
 				</label>
 				{error && <p className="error">{error}</p>}
-				<button className="primary" disabled={pending} type="submit">
+				<Button disabled={pending} type="submit">
 					{pending ? "確認中…" : "ログイン"}
-				</button>
+				</Button>
 			</form>
 		</main>
 	);
@@ -147,15 +148,15 @@ function RootComponent() {
 								<small>Solo workspace</small>
 							</div>
 						</div>
-						<button
-							className="signout"
+						<Button
 							onClick={() =>
 								authClient.signOut().then(() => window.location.reload())
 							}
 							type="button"
+							variant="ghost"
 						>
 							ログアウト
-						</button>
+						</Button>
 					</aside>
 					<div className="workspace">
 						<header>

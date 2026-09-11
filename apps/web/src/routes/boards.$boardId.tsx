@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { queryClient, trpc, trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/boards/$boardId")({
@@ -83,40 +84,40 @@ function PlayReplay({
 				))}
 			</div>
 			<div className="replay-controls">
-				<button
-					className="secondary"
+				<Button
 					disabled={cursor === 0}
 					onClick={() => setCursor(0)}
 					type="button"
+					variant="secondary"
 				>
 					最初
-				</button>
-				<button
-					className="secondary"
+				</Button>
+				<Button
 					disabled={cursor === 0}
 					onClick={() => setCursor((value) => Math.max(0, value - 1))}
 					type="button"
+					variant="secondary"
 				>
 					戻る
-				</button>
-				<button
-					className="secondary"
+				</Button>
+				<Button
 					disabled={cursor === actions.length}
 					onClick={() =>
 						setCursor((value) => Math.min(actions.length, value + 1))
 					}
 					type="button"
+					variant="secondary"
 				>
 					進む
-				</button>
-				<button
-					className="secondary"
+				</Button>
+				<Button
 					disabled={cursor === actions.length}
 					onClick={() => setCursor(actions.length)}
 					type="button"
+					variant="secondary"
 				>
 					最後
-				</button>
+				</Button>
 			</div>
 			<div className="play-strip" title="ここまでに再生したカード">
 				{visible.map((action) => (
@@ -346,14 +347,14 @@ function BoardPage() {
 					</div>
 					<div>
 						<span>{item?.evaluationRun?.ruleEngineVersion ?? "—"}</span>
-						<button
-							className="secondary"
+						<Button
 							disabled={reevaluating}
 							onClick={() => reevaluateBoard(boardId, setReevaluating)}
 							type="button"
+							variant="secondary"
 						>
 							現在Engineで再評価
-						</button>
+						</Button>
 					</div>
 				</div>
 				{correction && (
@@ -366,16 +367,14 @@ function BoardPage() {
 							required
 							value={correctionReason}
 						/>
-						<button className="primary" type="submit">
-							保存
-						</button>
-						<button
-							className="secondary"
+						<Button type="submit">保存</Button>
+						<Button
 							onClick={() => setCorrection(undefined)}
 							type="button"
+							variant="secondary"
 						>
 							取消
-						</button>
+						</Button>
 					</form>
 				)}
 				<div className="evaluation-list">
@@ -444,14 +443,13 @@ function BoardPage() {
 							? "保存済みのDD TableとParを表示しています。"
 							: "端末内のWeb Workerで解析し、DD Table・Par・実Contractの最大トリックだけを保存します。"}
 					</p>
-					<button
-						className="primary"
+					<Button
 						disabled={ddsStatus === "解析中…"}
 						onClick={solveDoubleDummy}
 						type="button"
 					>
 						{ddsStatus || (item?.doubleDummy ? "再解析" : "DDSで解析")}
-					</button>
+					</Button>
 				</div>
 				{item?.doubleDummy && (
 					<div>

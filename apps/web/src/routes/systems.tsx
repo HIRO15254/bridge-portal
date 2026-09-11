@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { queryClient, trpc, trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/systems")({ component: SystemsPage });
@@ -73,9 +74,9 @@ function SystemsPage() {
 					placeholder="例: Standard 15–17 NT"
 					value={name}
 				/>
-				<button className="primary" disabled={busy === "create"} type="submit">
+				<Button disabled={busy === "create"} type="submit">
 					新しいDraftを作る
-				</button>
+				</Button>
 			</form>
 			{message && (
 				<p aria-live="polite" className="notice">
@@ -100,14 +101,14 @@ function SystemsPage() {
 								<b>{system.versions.length}</b> 公開版
 							</span>
 						</div>
-						<button
-							className="secondary"
+						<Button
 							disabled={busy === system.id}
 							onClick={() => publish(system.id)}
 							type="button"
+							variant="secondary"
 						>
 							{busy === system.id ? "公開中…" : "新Versionを公開"}
-						</button>
+						</Button>
 						{system.draft && (
 							<SystemEditor
 								busy={busy === `${system.id}:draft`}
@@ -640,9 +641,9 @@ function SystemEditor({
 						</div>
 					))}
 				</div>
-				<button className="primary" disabled={busy} type="submit">
+				<Button disabled={busy} type="submit">
 					{busy ? "保存中…" : "Draftを保存"}
-				</button>
+				</Button>
 			</form>
 		</details>
 	);
