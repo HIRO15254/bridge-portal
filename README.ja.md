@@ -1,59 +1,67 @@
 # Bridge Portal
 
-Cloudflare向けの最小構成フルスタックスターターです。Pages上のReact、Hono/tRPC Worker、初期状態では空のD1データベースで構成されます。
+Funbridgeの実戦と、2026年5月1日施行のJCBL「リストA」を結ぶ単一ユーザー向け学習ポータルです。
 
-[English](./README.md)
+## MVPの学習ループ
 
-## プロジェクトの作成
+1. `Rules`でリストAの全22大項目を学ぶ
+2. `My Systems`でRule・Variant・Natural call設定を選び、不変のSystem Versionを公開する
+3. 外部取得済みのFunbridge JSONを取り込む
+4. 本人のCall／Lead／Signalについて全22評価器を実行する
+5. Board Detailと`Statistics`からルールと実戦を往復する
 
-このリポジトリをcloneし、アプリケーションコードを追加する前に名前を初期化します。
+元のFunbridge JSONはPrivate R2へSHA-256で冪等保存し、D1にはTournament、Revision、Deal、Auction、Play、Score、評価Runを正規化します。同じTournament IDの更新は新しいRevisionとして保持します。不完全なAuction／Playも受け付け、客観的に判断できない評価は理由付き`INDETERMINATE`になります。
 
-```sh
-bun install --frozen-lockfile
-bun run template:init -- my-app --display-name "My App"
-```
+DDSはブラウザーのWeb Workerでオンデマンド実行します。Board Detailから、Deal、Auction、Play、Result、System、Double Dummy結果を含むPBN 2.1をエクスポートできます。
 
-slugはkebab-case必須です。初期化はworkspace scope、import、PWA metadata、Worker・Pages・D1のリソース名、このREADMEを一括更新します。Cloudflareリソースの作成、D1 UUIDの設定、Git remoteの変更は行いません。変更予定は`--dry-run`で確認できます。二重実行は拒否されます。
+## 技術構成
 
-## 含まれるもの
+- React 19、Vite、TanStack Router／Query、Tailwind CSS、shadcn/ui、PWA
+- Cloudflare Workers、Hono、tRPC
+- Drizzle ORM、Cloudflare D1、Private R2
+- Better Authによる単一ユーザー認証
+- Bun workspace、Vitest、Playwright
 
-- React 19、Vite、TanStack Router/Query、tRPC、Tailwind CSS、shadcn/ui、PWA基盤
-- Cloudflare Workers上のHono
-- 空のD1 schemaとmigrationディレクトリを持つDrizzle ORM
-- `DB`、`CORS_ORIGIN`、`VITE_SERVER_URL`だけの初期環境契約
-- 分割したVitest project、coverage、test discovery検証
-- `master`向けPRのCI、`master`からの本番deploy、同一リポジトリPRのpreview
-
-Webの`/`はtRPC APIへの接続状態を表示します。Workerの`/`とtRPCの`healthCheck`はどちらも`OK`を返します。
+詳しいpackage境界とコマンドは[`AGENTS.md`](./AGENTS.md)を参照してください。
 
 ## 開発
 
 ```sh
-cp apps/web/.env.example apps/web/.env.local
+bun install --frozen-lockfile
 bun run cf:typegen
 bun run db:migrate:local
 bun run dev
 ```
 
-主要な検査コマンド:
+主要な検証コマンド:
 
 ```sh
 bun run check-types
 bun run check
 bun run test
-bun run test:coverage
+bun run test:e2e
 bun run check:test-discovery
 bun run build
 ```
 
-Cloudflareの初期設定、本番deploy、preview DBの動作は[デプロイガイド](./docs/deploy.ja.md)を参照してください。
+## 初回管理者登録
 
-## 同梱セットアップSkill
+公開登録とOAuthは無効です。Workerへ`BETTER_AUTH_SECRET`と一時的な`BOOTSTRAP_TOKEN`をSecretとして設定し、次の環境変数をローカルシェルへ設定して一度だけ実行します。
 
-リポジトリSkillに対応したCodexでは、[`.agents/skills`](./.agents/skills/better-t-app-setup/SKILL.md)に同梱した`$better-t-app-setup`を利用できます。プロジェクト名の初期化、Cloudflare D1／Worker／Pages環境の準備・検証、CLIによるGitHub設定、deploy前検査を依頼できます。remote resourceの作成、repository設定の変更、migration、deployは、調査の副作用として実行せず、明示された場合だけ実行します。
+```sh
+bun run auth:bootstrap
+```
 
-## テンプレート方針
+必要な環境変数は`BRIDGE_PORTAL_API_URL`、`BRIDGE_PORTAL_BOOTSTRAP_TOKEN`、`BRIDGE_PORTAL_ADMIN_EMAIL`、`BRIDGE_PORTAL_ADMIN_NAME`、`BRIDGE_PORTAL_ADMIN_PASSWORD`です。任意で`BRIDGE_PORTAL_FUNBRIDGE_ID`も指定できます。作成後はCloudflareから`BOOTSTRAP_TOKEN`を削除してください。D1にユーザーが存在する場合、追加登録はサーバー側でも拒否されます。
 
-このテンプレートは[Sapphire2](https://github.com/HIRO15254/sapphire2)の開発・テスト・Cloudflare運用基盤を手動で参照して派生しています。認証、MCP/AI連携、ポーカーを含むドメイン機能、製品ブランド、Linear自動化、dev/releaseブランチ運用は意図的に含めません。
+## Funbridge JSONプロファイル
 
-上流の改善は都度評価して手動で取り込みます。Sapphire2の参照commitは固定せず、自動同期も行いません。
+取込ファイルは`format: "FUNBRIDGE_EXPORT"`、`formatVersion: 1`とし、Tournament、Board、Auction、Playを含むBridge Portal標準の交換プロファイルです。正式なFamilyは`BP_CIRCUIT`、`DAILY`、`SERIES`のみです。それぞれBP、地域、Series期間・昇降格の固有メタデータを検証します。
+
+完全な例は[`packages/domain/src/__tests__/fixtures`](./packages/domain/src/__tests__/fixtures)にあります。各手13枚・52枚一意性、action index、trick番号、Playカードの所有席と合法な順序を取込前に検証します。PBN、LIN、USEBIOからのインポートはMVP対象外です。
+
+このプロファイルはFunbridge社が公開する公式エクスポート仕様ではありません。外部取得処理が取得データをこの形へ変換して出力する前提です。テストでは合成fixtureに加え、Web版の読取専用リプレイから取得後に識別情報を除去した3 Familyのfixtureも検証します。
+
+## デプロイ
+
+Cloudflare Worker、D1、Private R2、PagesとGitHub Actionsを使用します。初期設定、本番deploy、初回管理者登録、PR previewの詳細は[デプロイガイド](./docs/deploy.ja.md)を参照してください。テンプレート由来の初期化とpreflightには同梱の[`better-t-app-setup`](./.agents/skills/better-t-app-setup/SKILL.md)を使用します。

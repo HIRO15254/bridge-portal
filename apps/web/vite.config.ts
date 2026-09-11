@@ -13,9 +13,12 @@ export default defineConfig({
 		VitePWA({
 			registerType: "autoUpdate",
 			manifest: {
+				description: "Funbridge実戦とJCBLリストAを結ぶ個人学習ポータル",
+				display: "standalone",
+				lang: "ja",
 				name: "Bridge Portal",
 				short_name: "Bridge Portal",
-				description: "Funbridge実戦とJCBLリストAを結ぶ個人学習ポータル",
+				start_url: "/",
 				theme_color: "#171717",
 			},
 			pwaAssets: { disabled: false, config: true },
