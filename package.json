@@ -1,0 +1,64 @@
+{
+  "name": "better-t-app-template",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.3.6",
+      "typescript": "7.0.2",
+      "@types/bun": "^1.3.11",
+      "hono": "4.12.12",
+      "@trpc/server": "11.16.0",
+      "@trpc/client": "11.16.0",
+      "drizzle-orm": "0.45.2"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build",
+    "check-types": "bun run --filter '*' check-types && tsc -p scripts/tsconfig.json --noEmit",
+    "dev:web": "bun run --filter @better-t-app-template/web dev",
+    "dev:server": "bun run --filter @better-t-app-template/server dev",
+    "db:generate": "bun run --filter @better-t-app-template/db db:generate",
+    "db:migrate:local": "bun scripts/d1-migrate.ts local",
+    "db:migrate:remote": "bun scripts/d1-migrate.ts remote",
+    "db:studio": "bun run --filter @better-t-app-template/db db:studio",
+    "cf:typegen": "bunx wrangler types apps/server/worker-configuration.d.ts -c apps/server/wrangler.jsonc",
+    "cf:typegen:check": "bunx wrangler types apps/server/worker-configuration.d.ts --check -c apps/server/wrangler.jsonc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --reporter=verbose",
+    "test:coverage": "vitest run --coverage",
+    "check:test-discovery": "bun scripts/check-test-discovery.ts",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "template:init": "bun scripts/template-init.ts",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.10",
+    "@types/bun": "catalog:",
+    "@vitest/coverage-istanbul": "4.1.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "miniflare": "4.20260401.0",
+    "typescript": "catalog:",
+    "ultracite": "7.4.3",
+    "vitest": "4.1.2",
+    "wrangler": "4.80.0"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "bun": ">=1.3.10"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,jsonc,css,scss,md,mdx}": [
+      "bun x ultracite fix"
+    ]
+  },
+  "packageManager": "bun@1.3.10"
+}

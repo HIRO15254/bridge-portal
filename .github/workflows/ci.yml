@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - run: bun run cf:typegen:check
+      - run: bun run check-types
+      - run: bun run check
+      - run: bun run check:test-discovery
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-discovery
+          path: test-results/discovery.json
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - run: bun run test:coverage --reporter=default --reporter=junit --outputFile=test-results/vitest.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-and-coverage
+          path: |
+            test-results/
+            coverage/
+
+  ci:
+    if: always()
+    needs: [static, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all checks
+        run: |
+          test "${{ needs.static.result }}" = "success"
+          test "${{ needs.unit.result }}" = "success"

@@ -1,0 +1,229 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: preview-deploy-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  setup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      db_name: ${{ steps.vars.outputs.db_name }}
+      api_url: ${{ steps.vars.outputs.api_url }}
+      web_url: ${{ steps.vars.outputs.web_url }}
+      pages_project: ${{ steps.vars.outputs.pages_project }}
+      worker_name: ${{ steps.vars.outputs.worker_name }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Resolve preview names and URLs
+        id: vars
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          app_slug=$(jq -r '.name' package.json)
+          worker_name="${app_slug}-api-pr-${PR_NUMBER}"
+          pages_project="$app_slug"
+          db_name="${app_slug}-db-pr-${PR_NUMBER}"
+          workers_subdomain=$(curl -sf \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" | jq -r '.result.subdomain')
+          pages_domain=$(curl -sf \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${pages_project}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" | jq -r '.result.subdomain')
+          echo "worker_name=${worker_name}" >> "$GITHUB_OUTPUT"
+          echo "pages_project=${pages_project}" >> "$GITHUB_OUTPUT"
+          echo "db_name=${db_name}" >> "$GITHUB_OUTPUT"
+          echo "api_url=https://${worker_name}.${workers_subdomain}.workers.dev" >> "$GITHUB_OUTPUT"
+          echo "web_url=https://pr-${PR_NUMBER}.${pages_domain}" >> "$GITHUB_OUTPUT"
+
+  d1:
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      database_id: ${{ steps.resolve.outputs.database_id }}
+      is_new: ${{ steps.resolve.outputs.is_new }}
+    steps:
+      - name: Resolve or create preview D1
+        id: resolve
+        env:
+          DB_NAME: ${{ needs.setup.outputs.db_name }}
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database"
+          resolve_id() {
+            curl -sf "${api}?per_page=1000&name=${DB_NAME}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              | jq -r --arg name "$DB_NAME" '.result[] | select(.name == $name) | .uuid' \
+              | head -n1
+          }
+          database_id=$(resolve_id || true)
+          is_new=false
+          if [ -z "$database_id" ]; then
+            response=$(curl -sf -X POST "$api" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"${DB_NAME}\"}")
+            database_id=$(echo "$response" | jq -r '.result.uuid // empty')
+            is_new=true
+          fi
+          test -n "$database_id" || { echo "::error::Unable to create ${DB_NAME}"; exit 1; }
+          echo "database_id=${database_id}" >> "$GITHUB_OUTPUT"
+          echo "is_new=${is_new}" >> "$GITHUB_OUTPUT"
+
+  prepare-database:
+    needs: [setup, d1]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - name: Configure preview D1 binding
+        env:
+          DB_ID: ${{ needs.d1.outputs.database_id }}
+          DB_NAME: ${{ needs.setup.outputs.db_name }}
+        run: |
+          cp apps/server/wrangler.jsonc /tmp/production-wrangler.jsonc
+          jq --arg id "$DB_ID" --arg name "$DB_NAME" \
+            '.d1_databases[0].database_id = $id | .d1_databases[0].database_name = $name' \
+            apps/server/wrangler.jsonc > /tmp/preview-wrangler.jsonc
+          mv /tmp/preview-wrangler.jsonc apps/server/wrangler.jsonc
+      - name: Seed new preview from production and apply branch migrations
+        env:
+          IS_NEW: ${{ needs.d1.outputs.is_new }}
+          PREVIEW_DB: ${{ needs.setup.outputs.db_name }}
+        run: |
+          set -euo pipefail
+          migrations="packages/db/src/migrations"
+          stash="${RUNNER_TEMP}/unreleased-migrations"
+          production_db=$(jq -r '.d1_databases[0].database_name' /tmp/production-wrangler.jsonc)
+          apply_preview_migrations() {
+            if find "$migrations" -maxdepth 1 -name '*.sql' -print -quit | grep -q .; then
+              bunx wrangler d1 migrations apply "$PREVIEW_DB" --remote -c apps/server/wrangler.jsonc
+            else
+              echo "No migrations to apply"
+            fi
+          }
+          if [ "$IS_NEW" = "true" ]; then
+            migration_table=$(bunx wrangler d1 execute "$production_db" --remote --json \
+              --command="SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'd1_migrations'" \
+              -c /tmp/production-wrangler.jsonc)
+            last_applied=""
+            if [ "$(echo "$migration_table" | jq -r '.[0].results | length')" -gt 0 ]; then
+              applied=$(bunx wrangler d1 execute "$production_db" --remote --json \
+                --command="SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1" \
+                -c /tmp/production-wrangler.jsonc)
+              last_applied=$(echo "$applied" | jq -r '.[0].results[0].name // empty')
+            fi
+            bun scripts/preview-d1.ts stage --last-applied "$last_applied" \
+              --migrations "$migrations" --stash "$stash"
+            restore_migrations() {
+              bun scripts/preview-d1.ts unstage --migrations "$migrations" --stash "$stash"
+            }
+            trap restore_migrations EXIT
+            apply_preview_migrations
+            data_tables=$(bunx wrangler d1 execute "$production_db" --remote --json \
+              --command="SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations'" \
+              -c /tmp/production-wrangler.jsonc)
+            if [ "$(echo "$data_tables" | jq -r '.[0].results | length')" -gt 0 ]; then
+              bunx wrangler d1 export "$production_db" --remote --no-schema \
+                --output="${RUNNER_TEMP}/production-data.sql" -c /tmp/production-wrangler.jsonc
+              bun scripts/preview-d1.ts restore --database "$PREVIEW_DB" \
+                --config apps/server/wrangler.jsonc --dump "${RUNNER_TEMP}/production-data.sql"
+            else
+              echo "Production D1 has no application tables; skipping data snapshot"
+            fi
+            restore_migrations
+            trap - EXIT
+          fi
+          apply_preview_migrations
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-wrangler
+          path: apps/server/wrangler.jsonc
+
+  deploy-api:
+    needs: [setup, d1, prepare-database]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: preview-wrangler
+          path: apps/server
+      - name: Deploy preview Worker
+        working-directory: apps/server
+        env:
+          WEB_URL: ${{ needs.setup.outputs.web_url }}
+          WORKER_NAME: ${{ needs.setup.outputs.worker_name }}
+        run: bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}"
+
+  deploy-web:
+    needs: [setup, deploy-api]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - run: bun install --frozen-lockfile
+      - name: Build web
+        env:
+          VITE_SERVER_URL: ${{ needs.setup.outputs.api_url }}
+        run: bun run --filter @better-t-app-template/web build
+      - name: Deploy preview Pages
+        env:
+          PAGES_PROJECT: ${{ needs.setup.outputs.pages_project }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bunx wrangler pages deploy apps/web/dist --project-name "$PAGES_PROJECT" --branch "pr-${PR_NUMBER}"
+
+  comment:
+    needs: [setup, deploy-api, deploy-web]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: peter-evans/find-comment@v3
+        id: find
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: Preview Environment
+      - uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            ## Preview Environment
+
+            | Service | URL |
+            |---|---|
+            | Web | ${{ needs.setup.outputs.web_url }} |
+            | API | ${{ needs.setup.outputs.api_url }} |
+
+            **Database:** production snapshot in `${{ needs.setup.outputs.db_name }}`

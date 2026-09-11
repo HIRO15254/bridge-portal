@@ -1,0 +1,14 @@
+import { createDb } from "@better-t-app-template/db";
+import { describe, expect, it } from "vitest";
+
+import { appRouter } from "../routers/index";
+
+describe("healthCheck", () => {
+	it("returns OK", async () => {
+		const caller = appRouter.createCaller({
+			db: createDb({} as Parameters<typeof createDb>[0]),
+		});
+
+		await expect(caller.healthCheck()).resolves.toBe("OK");
+	});
+});

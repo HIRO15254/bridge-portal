@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "better-t-app-template-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-11",
+  "vars": {
+    "CORS_ORIGIN": "http://localhost:3001"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "better-t-app-template-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/src/migrations"
+    }
+  ]
+}

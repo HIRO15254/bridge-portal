@@ -1,0 +1,21 @@
+{
+  "name": "@better-t-app-template/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@better-t-app-template/db": "workspace:*",
+    "@trpc/server": "catalog:"
+  },
+  "devDependencies": {
+    "@better-t-app-template/config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "4.1.2"
+  }
+}

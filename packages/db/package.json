@@ -1,0 +1,23 @@
+{
+  "name": "@better-t-app-template/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@better-t-app-template/config": "workspace:*",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "catalog:",
+    "vitest": "4.1.2"
+  }
+}

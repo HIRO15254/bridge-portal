@@ -1,0 +1,4 @@
+interface:
+  display_name: "Better T App Setup"
+  short_description: "Rename projects and prepare Cloudflare deployment"
+  default_prompt: "Use $better-t-app-setup to rename this template and prepare its Cloudflare deployment environment."
