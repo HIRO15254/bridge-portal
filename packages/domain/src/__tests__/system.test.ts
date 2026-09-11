@@ -46,14 +46,21 @@ describe("system settings", () => {
 		const { competitive: _competitive, ...legacy } = clone(
 			defaultSystemSettings
 		);
+		const { allowSingletonTopHonor: _singleton, ...legacyOpening } =
+			legacy.opening;
 		const { blackwoodMinHcp: _blackwood, ...legacyResponse } =
 			legacy.responseRebid;
-		const legacySettings = { ...legacy, responseRebid: legacyResponse };
+		const legacySettings = {
+			...legacy,
+			opening: legacyOpening,
+			responseRebid: legacyResponse,
+		};
 
 		const normalized = normalizeSystemSettings(legacySettings);
 
 		expect(normalized.competitive.takeoutDoubleMinHcp).toBe(12);
 		expect(normalized.competitive.balancingTakeoutDoubleMinHcp).toBe(9);
+		expect(normalized.opening.allowSingletonTopHonor).toBe(false);
 		expect(normalized.responseRebid.blackwoodMinHcp).toBe(16);
 		expect(normalized.responseRebid.weakTwoFeatureMinimumHonor).toBe("K");
 	});

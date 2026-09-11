@@ -61,7 +61,7 @@ export interface RuleEvaluation extends RuleEvaluationResult {
 	evaluationRunId: string;
 	id: string;
 	override?: {
-		correctedAt: Date;
+		createdAt: Date;
 		correctedByUserId: string;
 		reason: string;
 		verdict: AutomaticRuleVerdict;

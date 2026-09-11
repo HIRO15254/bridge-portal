@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
+import { RULE_ENGINE_VERSION } from "../packages/domain/src/evaluator";
 
 const apiUrl = "http://127.0.0.1:8787";
 const importCompletePattern = /取込が完了しました/;
@@ -94,7 +95,7 @@ test("Rule学習から実戦Boardへの往復まで完走する", async ({ page,
 	);
 
 	await page.getByRole("link", { name: "Statistics" }).click();
-	await expect(page.getByText("Engine 2.2.0")).toBeVisible();
+	await expect(page.getByText(`Engine ${RULE_ENGINE_VERSION}`)).toBeVisible();
 	await expect(page.locator(".stats-table .table-row").first()).toBeVisible();
 
 	await page.goto(boardUrl);

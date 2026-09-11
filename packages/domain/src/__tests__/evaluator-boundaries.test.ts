@@ -47,6 +47,43 @@ function input(
 }
 
 describe("priority evaluator boundaries", () => {
+	it.each([
+		"A-CA-01",
+		"A-CA-02",
+	] as const)("does not evaluate %s for declarer or dummy", (officialItemId) => {
+		const declarerInput = input("98.AKQJ.432.4321", []);
+		declarerInput.deal.declarer = "N";
+		declarerInput.play = [
+			{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
+			{ card: "S9", index: 1, seat: "N", trickNumber: 1 },
+		];
+		declarerInput.playComplete = true;
+		expect(
+			evaluateOfficialItem(officialItemId, declarerInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+
+		const dummyInput = input("98.AKQJ.432.4321", []);
+		dummyInput.deal.declarer = "S";
+		dummyInput.play = declarerInput.play;
+		dummyInput.playComplete = true;
+		expect(
+			evaluateOfficialItem(officialItemId, dummyInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+	});
+
+	it("finds the opening lead by action index even when persisted play is unordered", () => {
+		const evaluationInput = input("AKQJ.432.432.32", []);
+		evaluationInput.deal.declarer = "E";
+		evaluationInput.play = [
+			{ card: "H2", index: 1, seat: "E", trickNumber: 1 },
+			{ card: "SA", index: 0, seat: "N", trickNumber: 1 },
+		];
+
+		expect(
+			evaluateOfficialItem("A-CA-01", evaluationInput).automaticVerdict
+		).toBe("COMPLIED");
+	});
+
 	it("accepts Rule of 10 exactly and rejects nine", () => {
 		const settings = {
 			...defaultSystemSettings,
@@ -79,6 +116,40 @@ describe("priority evaluator boundaries", () => {
 				"A-OB-02",
 				input("AKQJ.AKQ2.32.432", [["N", "2C"]], { selectedVariants })
 			).automaticVerdict
+		).toBe("DEVIATED_WRONG_APPLICATION");
+	});
+
+	it("accepts only the permitted singleton-top-honor 4-4-4-1 as Natural 1NT", () => {
+		const settings = {
+			...defaultSystemSettings,
+			opening: {
+				...defaultSystemSettings.opening,
+				allowSingletonTopHonor: true,
+			},
+		};
+		const acceptedHands = [
+			"A.KJ32.QJ32.KJ32",
+			"K.AJ32.QJ32.KJ32",
+			"Q.AJ32.KJ32.KJ32",
+		];
+		for (const hand of acceptedHands) {
+			expect(
+				evaluateOfficialItem(
+					"A-OB-01",
+					input(hand, [["N", "1NT"]], { settings })
+				).automaticVerdict
+			).toBe("COMPLIED");
+		}
+
+		expect(
+			evaluateOfficialItem(
+				"A-OB-01",
+				input("J.AK32.QJ32.KJ32", [["N", "1NT"]], { settings })
+			).automaticVerdict
+		).toBe("DEVIATED_WRONG_APPLICATION");
+		expect(
+			evaluateOfficialItem("A-OB-01", input("A.KJ32.QJ32.KJ32", [["N", "1NT"]]))
+				.automaticVerdict
 		).toBe("DEVIATED_WRONG_APPLICATION");
 	});
 

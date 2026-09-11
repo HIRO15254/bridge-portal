@@ -13,7 +13,7 @@ import type {
 	SystemSnapshot,
 } from "./types";
 
-export const RULE_ENGINE_VERSION = "2.2.0" as const;
+export const RULE_ENGINE_VERSION = "2.2.1" as const;
 
 export interface EvaluationInput {
 	auction?: AuctionCall[];
@@ -218,9 +218,23 @@ function losers(hand: string): number {
 	return hand.split(".").reduce((total, suit) => total + losersInSuit(suit), 0);
 }
 
-function isBalanced(hand: string): boolean {
-	const lengths = hand.split(".").map((suit) => suit.length);
-	return Math.min(...lengths) >= 2 && Math.max(...lengths) <= 5;
+function isBalanced(hand: string, allowSingletonTopHonor = false): boolean {
+	const suits = hand.split(".");
+	const lengths = suits.map((suit) => suit.length);
+	if (Math.min(...lengths) >= 2 && Math.max(...lengths) <= 5) {
+		return true;
+	}
+	if (!allowSingletonTopHonor) {
+		return false;
+	}
+	const singletonIndex = lengths.indexOf(1);
+	return (
+		singletonIndex >= 0 &&
+		lengths.every((length, index) =>
+			index === singletonIndex ? length === 1 : length === 4
+		) &&
+		["A", "K", "Q"].includes(suits[singletonIndex] ?? "")
+	);
 }
 
 function firstHeroCall(context: EvaluationContext): AuctionCall | undefined {
@@ -300,7 +314,7 @@ function naturalOpeningCandidate(
 		hasVariant(context, "A-OB-01", "Natural 1NT") &&
 		context.points >= opening.oneNtMinHcp &&
 		context.points <= opening.oneNtMaxHcp &&
-		isBalanced(context.hand)
+		isBalanced(context.hand, opening.allowSingletonTopHonor)
 	) {
 		return "1NT";
 	}
@@ -364,7 +378,7 @@ function naturalOpeningAgreement(context: EvaluationContext, bid: Bid) {
 			valid:
 				context.points >= opening.oneNtMinHcp &&
 				context.points <= opening.oneNtMaxHcp &&
-				isBalanced(context.hand),
+				isBalanced(context.hand, opening.allowSingletonTopHonor),
 		};
 	}
 	if (bid.level === 1) {
@@ -513,7 +527,12 @@ function evaluateNaturalOpenerRebid(
 	}
 	const length = bidSuitLength(context, bid);
 	const shapeValid =
-		bid.strain === "NT" ? isBalanced(context.hand) : length >= minimumLength;
+		bid.strain === "NT"
+			? isBalanced(
+					context.hand,
+					context.system.settings.opening.allowSingletonTopHonor
+				)
+			: length >= minimumLength;
 	const facts = {
 		call,
 		hcp: context.points,
@@ -605,7 +624,12 @@ function evaluateNaturalResponderRebid(
 	}
 	const length = bidSuitLength(context, bid);
 	const shapeValid =
-		bid.strain === "NT" ? isBalanced(context.hand) : length >= minimumLength;
+		bid.strain === "NT"
+			? isBalanced(
+					context.hand,
+					context.system.settings.opening.allowSingletonTopHonor
+				)
+			: length >= minimumLength;
 	const facts = {
 		call,
 		hcp: context.points,
@@ -1475,7 +1499,10 @@ function evaluateOneNtRange(rule: RuleDefinition, context: EvaluationContext) {
 		const inRange =
 			context.points >= oneNtMinHcp &&
 			context.points <= oneNtMaxHcp &&
-			isBalanced(context.hand);
+			isBalanced(
+				context.hand,
+				context.system.settings.opening.allowSingletonTopHonor
+			);
 		if (call === "1NT") {
 			return rangeAllowed && inRange
 				? complied(
@@ -2061,7 +2088,15 @@ function expectedLeadRank(
 }
 
 function evaluateOpeningLead(rule: RuleDefinition, context: EvaluationContext) {
-	const lead = context.input.play?.[0];
+	if (
+		context.input.deal.declarer &&
+		samePartnership(context.input.deal.declarer, context.heroSeat)
+	) {
+		return notApplicable(rule, "HERO_NOT_DEFENDER");
+	}
+	const lead = [...(context.input.play ?? [])].sort(
+		(left, right) => left.index - right.index
+	)[0];
 	if (!lead || lead.seat !== context.heroSeat) {
 		return notApplicable(rule, "HERO_NOT_ON_OPENING_LEAD");
 	}
@@ -2088,6 +2123,12 @@ function evaluateOpeningLead(rule: RuleDefinition, context: EvaluationContext) {
 }
 
 function evaluateSignals(rule: RuleDefinition, context: EvaluationContext) {
+	if (
+		context.input.deal.declarer &&
+		samePartnership(context.input.deal.declarer, context.heroSeat)
+	) {
+		return notApplicable(rule, "HERO_NOT_DEFENDER");
+	}
 	const play = [...(context.input.play ?? [])].sort(
 		(left, right) => left.index - right.index
 	);

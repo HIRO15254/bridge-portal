@@ -23,7 +23,24 @@ After changing `wrangler.jsonc`, run `bun run cf:typegen` and commit the generat
 
 A push to `master` runs CI, applies D1 migrations, deploys the Worker, then builds and deploys Pages. Deployment stops if the production D1 UUID is still the placeholder.
 
-The initial template has no SQL migration. In that state the migration command exits successfully without contacting D1. The first derived feature that adds tables should generate and commit the first real migration.
+This repository contains versioned D1 migrations. The production workflow applies only pending migrations in order. After a schema change, generate and commit a new migration with `bun run db:generate`.
+
+## One-time administrator bootstrap
+
+Public sign-up and OAuth are disabled. After the production deploy and migrations succeed, put a temporary token on the production Worker:
+
+```sh
+bunx wrangler secret put BOOTSTRAP_TOKEN --name bridge-portal-api
+```
+
+Set `BRIDGE_PORTAL_API_URL`, `BRIDGE_PORTAL_BOOTSTRAP_TOKEN`, `BRIDGE_PORTAL_ADMIN_EMAIL`, `BRIDGE_PORTAL_ADMIN_NAME`, and `BRIDGE_PORTAL_ADMIN_PASSWORD` in the local shell. Optionally set `BRIDGE_PORTAL_FUNBRIDGE_ID`, then run the bootstrap once and remove the temporary secret:
+
+```sh
+bun run auth:bootstrap
+bunx wrangler secret delete BOOTSTRAP_TOKEN --name bridge-portal-api
+```
+
+Without that secret the bootstrap endpoint returns 404. It also rejects additional registrations once D1 contains one user.
 
 ## Pull request previews
 

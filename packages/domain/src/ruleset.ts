@@ -29,9 +29,9 @@ export interface RuleDefinition {
 
 const applicabilityById: Readonly<Record<string, string>> = {
 	"A-OB-01":
-		"オープンする番で、それ以前にパス以外のCallがなく、ハンドをナチュラルに表現するとき。Weak TwoではHCPと最長スーツ枚数の合計も確認する。",
+		"オープンする番で、それ以前にパス以外のCallがなく、ハンドをナチュラルに表現するとき。Natural NTは通常のバランス形に加え、A・K・Qいずれかのシングルトンを持ち他の3スーツが各4枚の形も選択できる。Weak TwoではHCPとビッドスーツ枚数の合計も確認する。",
 	"A-OB-02":
-		"オープンする番で、採用した3定義のいずれかを満たすゲームフォース級のハンドを2♣で示すとき。",
+		"オープンする番で、20HCP以上、17HCP以上かつメジャー4ルーザー以下／マイナー3ルーザー以下、または14HCP以上・5コントロール以上かつ同じルーザー条件のうち、採用した定義を満たすハンドを2♣で示すとき。",
 	"A-RR-01":
 		"パートナーのナチュラルCallへ応答するとき、またはオープナー／レスポンダーが自然なスーツやNTを再提示するとき。",
 	"A-RR-02":
@@ -107,18 +107,18 @@ export const JCBL_LIST_A_2026_05_01 = Object.freeze([
 		"A-OB-01",
 		"OPENING_BIDS",
 		"ナチュラル・オープン",
-		"ウィーク2を含むナチュラルなオープン。ウィーク2はRule of 10を満たす。",
-		"6HCPで6枚スペードなら合計12なので2♠の候補になる。",
+		"ウィーク2を含むナチュラルなオープン。Natural NTでは通常のバランス形とシングルトン・トップオナーを持つ4-4-4-1を扱い、ウィーク2はRule of 10を満たす。",
+		"Systemで許可していれば、♠Aのシングルトンを持つ4-4-4-1は設定レンジ内でNatural 1NTの候補になる。6HCPで6枚スペードなら合計12なので2♠の候補になる。",
 		["1-level natural", "Natural 1NT", "Weak Two", "Rule of 10"],
-		["HCP range", "Suit length", "NT shape"],
+		["HCP range", "Suit length", "NT shape / singleton top honor"],
 		"CONTEXTUAL"
 	),
 	rule(
 		"A-OB-02",
 		"OPENING_BIDS",
 		"強いアーティフィシャル2♣",
-		"ゲームがありそうな強いハンドを示すフォーシング2♣。3種類の強さの定義を扱う。",
-		"20HCP以上、または規定のルーザー数とHCP／コントロール条件を満たす。",
+		"強いハンドを示すフォーシング2♣。20HCP以上、17HCP以上と規定ルーザー数、14HCP以上・5コントロール以上と規定ルーザー数の3定義を扱う。",
+		"メジャーなら4ルーザー以下、マイナーなら3ルーザー以下を、選んだHCP／コントロール条件と組み合わせる。",
 		["20+ HCP", "17+ HCP loser definition", "14+ HCP and 5+ controls"],
 		["Strong hand definition"],
 		"REQUIRED"

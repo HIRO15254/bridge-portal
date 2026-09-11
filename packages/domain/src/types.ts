@@ -48,6 +48,7 @@ export interface BridgeDeal {
 
 export const systemSettingsSchema = z.object({
 	opening: z.object({
+		allowSingletonTopHonor: z.boolean(),
 		oneLevelMinHcp: z.number().int().min(0).max(37),
 		oneClubMinLength: z.number().int().min(0).max(13),
 		oneDiamondMinLength: z.number().int().min(0).max(13),
@@ -111,6 +112,7 @@ export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 
 export const defaultSystemSettings: SystemSettings = {
 	opening: {
+		allowSingletonTopHonor: false,
 		oneLevelMinHcp: 12,
 		oneClubMinLength: 3,
 		oneDiamondMinLength: 3,

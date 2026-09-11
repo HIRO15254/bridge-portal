@@ -199,6 +199,7 @@ function SystemEditor({
 			selectedVariants,
 			settings: {
 				opening: {
+					allowSingletonTopHonor: data.has("allowSingletonTopHonor"),
 					oneLevelMinHcp: numberValue(data, "openingOneLevelMinHcp"),
 					oneClubMinLength: numberValue(data, "oneClubMinLength"),
 					oneDiamondMinLength: numberValue(data, "oneDiamondMinLength"),
@@ -473,6 +474,14 @@ function SystemEditor({
 							/>
 						</label>
 					))}
+					<label>
+						<input
+							defaultChecked={draft.settings.opening.allowSingletonTopHonor}
+							name="allowSingletonTopHonor"
+							type="checkbox"
+						/>
+						Natural NTでシングルトン・トップオナーの4-4-4-1を許可
+					</label>
 					<label>
 						Stayman 両4枚メジャー応答
 						<select

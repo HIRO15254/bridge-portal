@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { appRouter } from "@bridge-portal/api/routers/index";
 import { createDb, type D1Database } from "@bridge-portal/db";
+import { RULE_ENGINE_VERSION } from "@bridge-portal/domain";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -232,7 +233,27 @@ describe("stored MVP workflow", () => {
 		const board = await caller.boards.byId({ id: boardId });
 		expect(board.systemVersionId).toBe(published.id);
 		expect(board.evaluations).toHaveLength(22);
-		expect(board.evaluationRun?.ruleEngineVersion).toBe("2.2.0");
+		expect(board.evaluationRun?.ruleEngineVersion).toBe(RULE_ENGINE_VERSION);
+		const automatic = board.evaluations[0];
+		if (!automatic) {
+			throw new Error("Evaluation was not persisted");
+		}
+		await caller.boards.override({
+			evaluationId: automatic.id,
+			reason: "実戦メモを確認して意図を訂正",
+			verdict: "INDETERMINATE",
+		});
+		const correctedBoard = await caller.boards.byId({ id: boardId });
+		const corrected = correctedBoard.evaluations.find(
+			(evaluation) => evaluation.id === automatic.id
+		);
+		expect(corrected?.automaticVerdict).toBe(automatic.automaticVerdict);
+		expect(corrected?.override).toMatchObject({
+			correctedByUserId: learner.id,
+			reason: "実戦メモを確認して意図を訂正",
+			verdict: "INDETERMINATE",
+		});
+		expect(corrected?.override?.createdAt).toBeInstanceOf(Date);
 
 		const stats = await caller.statistics.summary();
 		expect(
