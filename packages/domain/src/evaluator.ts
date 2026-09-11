@@ -343,6 +343,49 @@ function naturalResponseMinLength(bid: Bid): number {
 	return bid.strain === "H" || bid.strain === "S" ? 4 : 3;
 }
 
+function isGameBid(bid: Bid): boolean {
+	if (bid.strain === "NT") {
+		return bid.level >= 3;
+	}
+	if (bid.strain === "H" || bid.strain === "S") {
+		return bid.level >= 4;
+	}
+	return bid.level >= 5;
+}
+
+function naturalInitialResponseStrength(
+	context: EvaluationContext,
+	openingBid: Bid,
+	responseBid: Bid
+): { minimumHcp: number; strengthClass: string } {
+	const settings = context.system.settings.responseRebid;
+	if (isGameBid(responseBid) || isJumpShift(openingBid, responseBid)) {
+		return {
+			minimumHcp: settings.gameForcingMinHcp,
+			strengthClass: "GAME_FORCING",
+		};
+	}
+	const simpleRaise =
+		responseBid.strain === openingBid.strain &&
+		responseBid.level === openingBid.level + 1;
+	const weakSuitResponseToNt =
+		openingBid.strain === "NT" &&
+		responseBid.strain !== "NT" &&
+		responseBid.level === 2;
+	const invitational =
+		!(simpleRaise || weakSuitResponseToNt) &&
+		(responseBid.level >= 2 || responseBid.level > openingBid.level);
+	return invitational
+		? {
+				minimumHcp: settings.invitationalMinHcp,
+				strengthClass: "INVITATIONAL",
+			}
+		: {
+				minimumHcp: settings.minimumResponseHcp,
+				strengthClass: "MINIMUM",
+			};
+}
+
 function isJumpShift(openingBid: Bid, responseBid: Bid): boolean {
 	return (
 		responseBid.strain !== "NT" &&
@@ -955,14 +998,19 @@ function evaluateNaturalResponse(
 		return notApplicable(rule);
 	}
 	const minimumLength = naturalResponseMinLength(bid);
+	const strength = naturalInitialResponseStrength(
+		context,
+		response.openingBid,
+		bid
+	);
 	const valid =
-		context.points >=
-			context.system.settings.responseRebid.minimumResponseHcp &&
+		context.points >= strength.minimumHcp &&
 		(bid.strain === "NT" || bidSuitLength(context, bid) >= minimumLength);
 	const facts = {
 		call,
 		hcp: context.points,
 		minimumLength,
+		...strength,
 		suitLength: bidSuitLength(context, bid),
 	};
 	return valid
@@ -2393,7 +2441,10 @@ function expectedLeadRank(
 	if (holding.includes("A") && holding.includes("K")) {
 		return context.system.settings.lead.fromAk;
 	}
-	if (hasVariant(context, "A-CA-01", "Honor sequence")) {
+	if (
+		hasVariant(context, "A-CA-01", "Honor sequence") &&
+		context.system.settings.lead.honorSequence === "TOP"
+	) {
 		for (const sequence of ["AKQ", "KQJ", "QJT", "JT9"]) {
 			if ([...sequence].every((rank) => holding.includes(rank))) {
 				return sequence[0];

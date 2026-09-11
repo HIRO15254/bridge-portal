@@ -724,7 +724,7 @@ describe("priority evaluator boundaries", () => {
 		},
 		{
 			call: "4C",
-			hand: "32.32.432.AKQJ98",
+			hand: "A2.K2.432.AKQJ98",
 			opening: "1NT",
 			removedItem: "A-RR-07",
 		},
@@ -749,6 +749,55 @@ describe("priority evaluator boundaries", () => {
 		expect(
 			evaluateOfficialItem("A-RR-01", evaluationInput).automaticVerdict
 		).toBe("COMPLIED");
+	});
+
+	it("uses the invitational threshold for a natural two-over-one response", () => {
+		const calls: [Seat, string][] = [
+			["S", "1S"],
+			["W", "PASS"],
+			["N", "2H"],
+		];
+		const below = evaluateOfficialItem(
+			"A-RR-01",
+			input("32.KQJT9.K32.432", calls)
+		);
+		const exact = evaluateOfficialItem(
+			"A-RR-01",
+			input("32.KQJT9.A32.432", calls)
+		);
+
+		expect(below.automaticVerdict).toBe("DEVIATED_WRONG_APPLICATION");
+		expect(below.facts).toMatchObject({
+			minimumHcp: 10,
+			strengthClass: "INVITATIONAL",
+		});
+		expect(exact.automaticVerdict).toBe("COMPLIED");
+	});
+
+	it("uses the game-forcing threshold for a natural jump shift", () => {
+		const calls: [Seat, string][] = [
+			["S", "1C"],
+			["W", "PASS"],
+			["N", "3S"],
+		];
+		const systemOverrides = {
+			adoptedOfficialItemIds: allIds.filter((id) => id !== "A-RR-10"),
+		};
+		const below = evaluateOfficialItem(
+			"A-RR-01",
+			input("KQJ98.A32.Q32.32", calls, systemOverrides)
+		);
+		const exact = evaluateOfficialItem(
+			"A-RR-01",
+			input("KQJ98.A32.K32.32", calls, systemOverrides)
+		);
+
+		expect(below.automaticVerdict).toBe("DEVIATED_WRONG_APPLICATION");
+		expect(below.facts).toMatchObject({
+			minimumHcp: 13,
+			strengthClass: "GAME_FORCING",
+		});
+		expect(exact.automaticVerdict).toBe("COMPLIED");
 	});
 
 	it("evaluates 2D naturally when the artificial response is not adopted", () => {
