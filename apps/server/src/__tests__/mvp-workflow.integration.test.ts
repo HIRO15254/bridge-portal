@@ -173,7 +173,7 @@ describe("stored MVP workflow", () => {
 		const board = await caller.boards.byId({ id: boardId });
 		expect(board.systemVersionId).toBe(published.id);
 		expect(board.evaluations).toHaveLength(22);
-		expect(board.evaluationRun?.ruleEngineVersion).toBe("2.1.0");
+		expect(board.evaluationRun?.ruleEngineVersion).toBe("2.2.0");
 
 		const stats = await caller.statistics.summary();
 		expect(

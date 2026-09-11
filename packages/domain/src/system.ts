@@ -376,6 +376,45 @@ function validateLeadSettings(
 	}
 }
 
+function validateVariantDependencies(
+	draft: SystemDraftInput,
+	adopted: ReadonlySet<string>,
+	issues: SystemValidationIssue[]
+): void {
+	const selected = (officialItemId: string, variant: string) =>
+		(draft.selectedVariants[officialItemId] ?? []).includes(variant);
+	const requireVariant = (
+		officialItemId: string,
+		variant: string,
+		requiredOfficialItemId: string,
+		requiredVariant?: string
+	) => {
+		if (!(adopted.has(officialItemId) && selected(officialItemId, variant))) {
+			return;
+		}
+		const dependencyMet =
+			adopted.has(requiredOfficialItemId) &&
+			(!requiredVariant || selected(requiredOfficialItemId, requiredVariant));
+		if (!dependencyMet) {
+			issues.push({
+				code: "MISSING_VARIANT",
+				message: `${officialItemId}の「${variant}」には${requiredOfficialItemId}${
+					requiredVariant ? `の「${requiredVariant}」` : ""
+				}が必要です。`,
+				officialItemId,
+			});
+		}
+	};
+
+	requireVariant("A-OB-01", "Rule of 10", "A-OB-01", "Weak Two");
+	for (const variant of ["5NT king ask", "DOPI", "DEPO", "ROPI"]) {
+		requireVariant("A-RR-06", variant, "A-RR-06", "Blackwood");
+	}
+	requireVariant("A-RR-07", "5C king ask", "A-RR-07", "4C ace ask");
+	requireVariant("A-RR-09", "Stayman eligibility", "A-RR-02");
+	requireVariant("A-RR-09", "Gerber eligibility", "A-RR-07");
+}
+
 export function validateSystemDraft(
 	draft: SystemDraftInput
 ): SystemValidationIssue[] {
@@ -393,6 +432,7 @@ export function validateSystemDraft(
 		validateLeadSettings(draft, settings, adopted, issues);
 	}
 	validateTemplateConflicts(draft, adopted, issues);
+	validateVariantDependencies(draft, adopted, issues);
 
 	return issues;
 }

@@ -13,7 +13,7 @@ import type {
 	SystemSnapshot,
 } from "./types";
 
-export const RULE_ENGINE_VERSION = "2.1.0" as const;
+export const RULE_ENGINE_VERSION = "2.2.0" as const;
 
 export interface EvaluationInput {
 	auction?: AuctionCall[];
@@ -160,6 +160,16 @@ function samePartnership(left: Seat, right: Seat): boolean {
 	return seatOrder.indexOf(left) % 2 === seatOrder.indexOf(right) % 2;
 }
 
+function hasVariant(
+	context: EvaluationContext,
+	officialItemId: OfficialItemId,
+	variant: string
+) {
+	return (context.system.selectedVariants[officialItemId] ?? []).includes(
+		variant
+	);
+}
+
 function hcp(hand: string): number {
 	return [...hand].reduce((total, rank) => {
 		if (rank === "A") {
@@ -287,6 +297,7 @@ function naturalOpeningCandidate(
 ): string | undefined {
 	const { opening } = context.system.settings;
 	if (
+		hasVariant(context, "A-OB-01", "Natural 1NT") &&
 		context.points >= opening.oneNtMinHcp &&
 		context.points <= opening.oneNtMaxHcp &&
 		isBalanced(context.hand)
@@ -294,17 +305,24 @@ function naturalOpeningCandidate(
 		return "1NT";
 	}
 	if (
+		hasVariant(context, "A-OB-01", "Weak Two") &&
 		context.points >= opening.weakTwoMinHcp &&
 		context.points <= opening.weakTwoMaxHcp
 	) {
 		for (const suit of ["S", "H", "D"] as const) {
 			const length = context.lengths[suit];
-			if (length >= 5 && context.points + length >= 10) {
+			const ruleOfTenMet =
+				!hasVariant(context, "A-OB-01", "Rule of 10") ||
+				context.points + length >= 10;
+			if (length >= 5 && ruleOfTenMet) {
 				return `2${suit}`;
 			}
 		}
 	}
-	if (context.points < opening.oneLevelMinHcp) {
+	if (
+		!hasVariant(context, "A-OB-01", "1-level natural") ||
+		context.points < opening.oneLevelMinHcp
+	) {
 		return;
 	}
 	for (const suit of ["S", "H", "D", "C"] as const) {
@@ -338,6 +356,44 @@ function strongTwoClubEligible(context: EvaluationContext): boolean {
 	);
 }
 
+function naturalOpeningAgreement(context: EvaluationContext, bid: Bid) {
+	const { opening } = context.system.settings;
+	if (bid.level === 1 && bid.strain === "NT") {
+		return {
+			adopted: hasVariant(context, "A-OB-01", "Natural 1NT"),
+			valid:
+				context.points >= opening.oneNtMinHcp &&
+				context.points <= opening.oneNtMaxHcp &&
+				isBalanced(context.hand),
+		};
+	}
+	if (bid.level === 1) {
+		return {
+			adopted: hasVariant(context, "A-OB-01", "1-level natural"),
+			valid:
+				context.points >= opening.oneLevelMinHcp &&
+				bid.strain !== "NT" &&
+				bidSuitLength(context, bid) >=
+					naturalOpeningMinLength(context, bid.strain),
+		};
+	}
+	if (bid.level !== 2 || !["D", "H", "S"].includes(bid.strain)) {
+		return;
+	}
+	const length = bidSuitLength(context, bid);
+	const ruleOfTenMet =
+		!hasVariant(context, "A-OB-01", "Rule of 10") ||
+		context.points + length >= 10;
+	return {
+		adopted: hasVariant(context, "A-OB-01", "Weak Two"),
+		valid:
+			context.points >= opening.weakTwoMinHcp &&
+			context.points <= opening.weakTwoMaxHcp &&
+			length >= 5 &&
+			ruleOfTenMet,
+	};
+}
+
 function evaluateNaturalOpening(
 	rule: RuleDefinition,
 	context: EvaluationContext
@@ -357,34 +413,19 @@ function evaluateNaturalOpening(
 	if (!bid || (bid.level === 2 && bid.strain === "C")) {
 		return notApplicable(rule);
 	}
-	const { opening } = context.system.settings;
-	let valid = false;
-	if (bid.level === 1 && bid.strain === "NT") {
-		valid =
-			context.points >= opening.oneNtMinHcp &&
-			context.points <= opening.oneNtMaxHcp &&
-			isBalanced(context.hand);
-	} else if (bid.level === 1 && bid.strain !== "NT") {
-		const minimum = naturalOpeningMinLength(context, bid.strain);
-		valid =
-			context.points >= opening.oneLevelMinHcp &&
-			bidSuitLength(context, bid) >= minimum;
-	} else if (bid.level === 2 && ["D", "H", "S"].includes(bid.strain)) {
-		const length = bidSuitLength(context, bid);
-		valid =
-			context.points >= opening.weakTwoMinHcp &&
-			context.points <= opening.weakTwoMaxHcp &&
-			length >= 5 &&
-			context.points + length >= 10;
-	} else {
+	const agreement = naturalOpeningAgreement(context, bid);
+	if (!agreement) {
 		return notApplicable(rule);
+	}
+	if (!agreement.adopted) {
+		return notApplicable(rule, "NATURAL_OPENING_VARIANT_NOT_ADOPTED");
 	}
 	const facts = {
 		call,
 		hcp: context.points,
 		suitLength: bidSuitLength(context, bid),
 	};
-	return valid
+	return agreement.valid
 		? complied(rule, "NATURAL_OPENING_COMPLIED", facts, action)
 		: wrong(rule, "NATURAL_OPENING_OUTSIDE_AGREEMENT", facts, action);
 }
@@ -434,6 +475,9 @@ function evaluateNaturalOpenerRebid(
 	rule: RuleDefinition,
 	context: EvaluationContext
 ): RuleEvaluationResult | undefined {
+	if (!hasVariant(context, "A-RR-01", "Opener rebid")) {
+		return;
+	}
 	const opening = openingBy(context, context.heroSeat);
 	const openingBid = opening ? parseBid(opening.call) : undefined;
 	if (!(opening && openingBid)) {
@@ -486,6 +530,9 @@ function evaluateNaturalResponderRebid(
 	rule: RuleDefinition,
 	context: EvaluationContext
 ): RuleEvaluationResult | undefined {
+	if (!hasVariant(context, "A-RR-01", "Responder rebid")) {
+		return;
+	}
 	const opening = openingBy(context, partner(context.heroSeat));
 	if (!opening) {
 		return;
@@ -585,6 +632,9 @@ function evaluateNaturalResponse(
 	if (!(response?.action && response.openingBid)) {
 		return evaluateNaturalOpenerRebid(rule, context) ?? notApplicable(rule);
 	}
+	if (!hasVariant(context, "A-RR-01", "Response")) {
+		return notApplicable(rule, "NATURAL_RESPONSE_VARIANT_NOT_ADOPTED");
+	}
 	const call = normalizeCall(response.action.call);
 	const bid = parseBid(call);
 	const conventional =
@@ -624,7 +674,59 @@ function evaluateNaturalResponse(
 		: wrong(rule, "NATURAL_RESPONSE_OUTSIDE_AGREEMENT", facts, response.action);
 }
 
+function evaluateStaymanResponse(
+	rule: RuleDefinition,
+	context: EvaluationContext
+): RuleEvaluationResult | undefined {
+	const opening = openingBy(context, context.heroSeat);
+	if (!opening || normalizeCall(opening.call) !== "1NT") {
+		return;
+	}
+	const ask = context.calls.find(
+		(candidate) =>
+			candidate.index > opening.index &&
+			candidate.seat === partner(context.heroSeat) &&
+			normalizeCall(candidate.call) === "2C"
+	);
+	const action = ask ? heroCallAfter(context, ask.index) : undefined;
+	if (!(ask && action)) {
+		return;
+	}
+	const interference = context.calls.some(
+		(candidate) =>
+			candidate.index > ask.index &&
+			candidate.index < action.index &&
+			!samePartnership(candidate.seat, context.heroSeat) &&
+			normalizeCall(candidate.call) !== "PASS"
+	);
+	if (interference) {
+		return indeterminate(rule, "STAYMAN_INTERFERENCE_NOT_OBJECTIVE");
+	}
+	let expected = "2D";
+	if (context.lengths.H >= 4 && context.lengths.S >= 4) {
+		expected = `2${context.system.settings.responseRebid.staymanBothMajorsResponse}`;
+	} else if (context.lengths.H >= 4) {
+		expected = "2H";
+	} else if (context.lengths.S >= 4) {
+		expected = "2S";
+	}
+	const actual = normalizeCall(action.call);
+	const facts = {
+		actual,
+		expected,
+		hearts: context.lengths.H,
+		spades: context.lengths.S,
+	};
+	return actual === expected
+		? complied(rule, "STAYMAN_RESPONSE_COMPLIED", facts, action)
+		: wrong(rule, "STAYMAN_RESPONSE_WRONG", facts, action);
+}
+
 function evaluateStayman(rule: RuleDefinition, context: EvaluationContext) {
+	const responseVerdict = evaluateStaymanResponse(rule, context);
+	if (responseVerdict) {
+		return responseVerdict;
+	}
 	const response = responseContext(context);
 	if (
 		!(
@@ -739,10 +841,131 @@ function evaluateWeakTwoNtToStrongTwo(
 		: notApplicable(rule);
 }
 
+function selectedWeakTwoInquiryVariant(context: EvaluationContext) {
+	const variants = context.system.selectedVariants["A-RR-05"] ?? [];
+	return variants.length === 1 ? variants[0] : undefined;
+}
+
+function featureInquiryResponse(
+	rule: RuleDefinition,
+	context: EvaluationContext,
+	openingSuit: "D" | "H" | "S"
+) {
+	const minimumHonor =
+		context.system.settings.responseRebid.weakTwoFeatureMinimumHonor;
+	const eligibleRanks = minimumHonor === "A" ? ["A"] : ["A", "K"];
+	const features = suitOrder.filter(
+		(suit) =>
+			suit !== openingSuit &&
+			eligibleRanks.some((rank) => holdings(context.hand)[suit].includes(rank))
+	);
+	if (features.length > 1) {
+		return indeterminate(rule, "FEATURE_ASK_MULTIPLE_FEATURES", {
+			featureCount: features.length,
+			features: features.join("+"),
+			minimumHonor,
+		});
+	}
+	return {
+		expected: features[0] ? `3${features[0]}` : `3${openingSuit}`,
+		facts: { feature: features[0] ?? null, minimumHonor },
+	};
+}
+
+function ogustInquiryResponse(
+	context: EvaluationContext,
+	openingSuit: "D" | "H" | "S"
+) {
+	const topHonors = [...holdings(context.hand)[openingSuit]].filter((rank) =>
+		["A", "K", "Q"].includes(rank)
+	).length;
+	const maximum =
+		context.points >=
+		context.system.settings.responseRebid.weakTwoOgustMaximumMinHcp;
+	const goodSuit =
+		topHonors >=
+		context.system.settings.responseRebid.weakTwoOgustGoodSuitTopHonors;
+	const responseByQuality: Record<string, string> = {
+		"false-false": "3C",
+		"false-true": "3D",
+		"true-false": "3H",
+		"true-true": "3S",
+	};
+	return {
+		expected:
+			topHonors === 3 ? "3NT" : responseByQuality[`${maximum}-${goodSuit}`],
+		facts: { goodSuit, maximum, topHonors },
+	};
+}
+
+function evaluateWeakTwoInquiryResponse(
+	rule: RuleDefinition,
+	context: EvaluationContext
+): RuleEvaluationResult | undefined {
+	const selectedVariant = selectedWeakTwoInquiryVariant(context);
+	const heroOpening = openingBy(context, context.heroSeat);
+	const heroOpeningBid = heroOpening ? parseBid(heroOpening.call) : undefined;
+	if (
+		!heroOpening ||
+		heroOpeningBid?.level !== 2 ||
+		heroOpeningBid.strain === "C" ||
+		heroOpeningBid.strain === "NT"
+	) {
+		return;
+	}
+	const partnerInquiry = context.calls.find(
+		(candidate) =>
+			candidate.index > heroOpening.index &&
+			candidate.seat === partner(context.heroSeat) &&
+			normalizeCall(candidate.call) === "2NT"
+	);
+	const openerResponse = partnerInquiry
+		? heroCallAfter(context, partnerInquiry.index)
+		: undefined;
+	if (!(partnerInquiry && openerResponse)) {
+		return;
+	}
+	if (!selectedVariant) {
+		return indeterminate(rule, "WEAK_TWO_INQUIRY_VARIANT_AMBIGUOUS");
+	}
+	const response =
+		selectedVariant === "Feature ask"
+			? featureInquiryResponse(rule, context, heroOpeningBid.strain)
+			: ogustInquiryResponse(context, heroOpeningBid.strain);
+	if ("automaticVerdict" in response) {
+		return response;
+	}
+	const actual = normalizeCall(openerResponse.call);
+	const facts = {
+		...response.facts,
+		actual,
+		expected: response.expected ?? null,
+		inquiryVariant: selectedVariant,
+	};
+	return actual === response.expected
+		? complied(
+				rule,
+				"WEAK_TWO_INQUIRY_RESPONSE_COMPLIED",
+				facts,
+				openerResponse
+			)
+		: wrong(
+				rule,
+				"WEAK_TWO_INQUIRY_RESPONSE_WRONG_STEP",
+				facts,
+				openerResponse
+			);
+}
+
 function evaluateWeakTwoInquiry(
 	rule: RuleDefinition,
 	context: EvaluationContext
 ) {
+	const responseVerdict = evaluateWeakTwoInquiryResponse(rule, context);
+	if (responseVerdict) {
+		return responseVerdict;
+	}
+	const selectedVariant = selectedWeakTwoInquiryVariant(context);
 	const response = responseContext(context);
 	if (
 		!(
@@ -766,7 +989,7 @@ function evaluateWeakTwoInquiry(
 			? complied(
 					rule,
 					"WEAK_TWO_2NT_INQUIRY_USED",
-					{ hcp: context.points },
+					{ hcp: context.points, inquiryVariant: selectedVariant ?? "UNSET" },
 					response.action
 				)
 			: wrong(
@@ -805,6 +1028,53 @@ function partnershipFit(
 	return;
 }
 
+function nextContractBid(call: string, offset: number): string | undefined {
+	const bid = parseBid(call);
+	if (!bid) {
+		return;
+	}
+	const strains: Bid["strain"][] = ["C", "D", "H", "S", "NT"];
+	const current =
+		(bid.level - 1) * strains.length + strains.indexOf(bid.strain);
+	const target = current + offset;
+	const level = Math.floor(target / strains.length) + 1;
+	const strain = strains[target % strains.length];
+	return level <= 7 && strain ? `${level}${strain}` : undefined;
+}
+
+function expectedBlackwoodInterferenceResponse(
+	context: EvaluationContext,
+	askCall: string,
+	opponentsBetween: AuctionCall[],
+	count: number
+) {
+	const method = (context.system.selectedVariants["A-RR-06"] ?? []).find(
+		(variant) => ["DOPI", "DEPO", "ROPI"].includes(variant)
+	);
+	if (method === "DEPO") {
+		return count % 2 === 0 ? "X" : "PASS";
+	}
+	if (method === "DOPI") {
+		if (count <= 1) {
+			return count === 0 ? "X" : "PASS";
+		}
+		const anchor = opponentsBetween
+			.map((candidate) => normalizeCall(candidate.call))
+			.findLast((candidate) => Boolean(parseBid(candidate)));
+		return anchor ? nextContractBid(anchor, count - 1) : undefined;
+	}
+	if (
+		method !== "ROPI" ||
+		normalizeCall(opponentsBetween.at(-1)?.call ?? "") !== "X"
+	) {
+		return;
+	}
+	if (count <= 1) {
+		return count === 0 ? "XX" : "PASS";
+	}
+	return nextContractBid(askCall, count - 1);
+}
+
 function expectedBlackwoodResponse(
 	context: EvaluationContext,
 	ask: AuctionCall,
@@ -826,44 +1096,37 @@ function expectedBlackwoodResponse(
 			askCall === "4NT" ? ["5C", "5D", "5H", "5S"] : ["6C", "6D", "6H", "6S"];
 		return steps[acesOrKings % 4];
 	}
-	const method = (context.system.selectedVariants["A-RR-06"] ?? []).find(
-		(variant) => ["DOPI", "DEPO", "ROPI"].includes(variant)
+	const count = acesOrKings % 4;
+	return expectedBlackwoodInterferenceResponse(
+		context,
+		askCall,
+		opponentsBetween,
+		count
 	);
-	if (method === "DEPO") {
-		return acesOrKings % 2 === 0 ? "X" : "PASS";
-	}
-	if (method === "DOPI" && acesOrKings <= 1) {
-		return acesOrKings === 0 ? "X" : "PASS";
-	}
-	if (
-		method === "ROPI" &&
-		normalizeCall(opponentsBetween.at(-1)?.call ?? "") === "X" &&
-		acesOrKings <= 1
-	) {
-		return acesOrKings === 0 ? "XX" : "PASS";
-	}
-	return;
 }
 
 function evaluateBlackwood(rule: RuleDefinition, context: EvaluationContext) {
-	const partnerAsk = context.calls.find((candidate) => {
-		if (candidate.seat !== partner(context.heroSeat)) {
-			return false;
-		}
-		const call = normalizeCall(candidate.call);
-		if (call === "4NT") {
-			return true;
-		}
-		return (
-			call === "5NT" &&
-			context.calls.some(
-				(prior) =>
-					prior.index < candidate.index &&
-					samePartnership(prior.seat, context.heroSeat) &&
-					normalizeCall(prior.call) === "4NT"
-			)
-		);
-	});
+	const partnerAsk = context.calls
+		.filter((candidate) => {
+			if (candidate.seat !== partner(context.heroSeat)) {
+				return false;
+			}
+			const call = normalizeCall(candidate.call);
+			if (call === "4NT") {
+				return hasVariant(context, "A-RR-06", "Blackwood");
+			}
+			return (
+				call === "5NT" &&
+				hasVariant(context, "A-RR-06", "5NT king ask") &&
+				context.calls.some(
+					(prior) =>
+						prior.index < candidate.index &&
+						samePartnership(prior.seat, context.heroSeat) &&
+						normalizeCall(prior.call) === "4NT"
+				)
+			);
+		})
+		.at(-1);
 	const response = partnerAsk
 		? heroCallAfter(context, partnerAsk.index)
 		: undefined;
@@ -890,21 +1153,26 @@ function evaluateBlackwood(rule: RuleDefinition, context: EvaluationContext) {
 					response
 				);
 	}
-	const action = context.heroCalls.find((candidate) => {
-		const call = normalizeCall(candidate.call);
-		if (call === "4NT") {
-			return Boolean(partnershipFit(context, candidate.index));
-		}
-		if (call !== "5NT") {
-			return false;
-		}
-		return context.calls.some(
-			(prior) =>
-				prior.index < candidate.index &&
-				samePartnership(prior.seat, context.heroSeat) &&
-				normalizeCall(prior.call) === "4NT"
-		);
-	});
+	const action = context.heroCalls
+		.filter((candidate) => {
+			const call = normalizeCall(candidate.call);
+			if (call === "4NT") {
+				return (
+					hasVariant(context, "A-RR-06", "Blackwood") &&
+					Boolean(partnershipFit(context, candidate.index))
+				);
+			}
+			if (call !== "5NT" || !hasVariant(context, "A-RR-06", "5NT king ask")) {
+				return false;
+			}
+			return context.calls.some(
+				(prior) =>
+					prior.index < candidate.index &&
+					samePartnership(prior.seat, context.heroSeat) &&
+					normalizeCall(prior.call) === "4NT"
+			);
+		})
+		.at(-1);
 	const fit = action ? partnershipFit(context, action.index) : undefined;
 	const eligible = Boolean(
 		fit &&
@@ -948,27 +1216,139 @@ function evaluateBlackwood(rule: RuleDefinition, context: EvaluationContext) {
 		: notApplicable(rule);
 }
 
+function partnershipNtBefore(context: EvaluationContext, action: AuctionCall) {
+	return context.calls.some(
+		(candidate) =>
+			candidate.index < action.index &&
+			samePartnership(candidate.seat, context.heroSeat) &&
+			parseBid(candidate.call)?.strain === "NT"
+	);
+}
+
+function priorGerberFourClubAsk(
+	context: EvaluationContext,
+	action: AuctionCall
+) {
+	return context.calls.find(
+		(candidate) =>
+			candidate.index < action.index &&
+			candidate.seat === action.seat &&
+			normalizeCall(candidate.call) === "4C" &&
+			partnershipNtBefore(context, candidate)
+	);
+}
+
+function evaluateGerberResponse(
+	rule: RuleDefinition,
+	context: EvaluationContext
+): RuleEvaluationResult | undefined {
+	const partnerAsk = context.calls
+		.filter((candidate) => {
+			if (candidate.seat !== partner(context.heroSeat)) {
+				return false;
+			}
+			const call = normalizeCall(candidate.call);
+			return (
+				(call === "4C" &&
+					hasVariant(context, "A-RR-07", "4C ace ask") &&
+					partnershipNtBefore(context, candidate)) ||
+				(call === "5C" &&
+					hasVariant(context, "A-RR-07", "5C king ask") &&
+					Boolean(priorGerberFourClubAsk(context, candidate)))
+			);
+		})
+		.at(-1);
+	const partnerAskResponse = partnerAsk
+		? heroCallAfter(context, partnerAsk.index)
+		: undefined;
+	if (!(partnerAsk && partnerAskResponse)) {
+		return;
+	}
+	const interference = context.calls.some(
+		(candidate) =>
+			candidate.index > partnerAsk.index &&
+			candidate.index < partnerAskResponse.index &&
+			!samePartnership(candidate.seat, context.heroSeat) &&
+			normalizeCall(candidate.call) !== "PASS"
+	);
+	if (interference) {
+		return indeterminate(rule, "GERBER_INTERFERENCE_NOT_OBJECTIVE", {
+			ask: normalizeCall(partnerAsk.call),
+		});
+	}
+	const ask = normalizeCall(partnerAsk.call);
+	const targetRank = ask === "4C" ? "A" : "K";
+	const controlsHeld = [...context.hand].filter(
+		(rank) => rank === targetRank
+	).length;
+	const steps =
+		ask === "4C" ? ["4D", "4H", "4S", "4NT"] : ["5D", "5H", "5S", "5NT"];
+	const expected = steps[controlsHeld % 4] ?? "";
+	const actual = normalizeCall(partnerAskResponse.call);
+	return actual === expected
+		? complied(
+				rule,
+				"GERBER_RESPONSE_COMPLIED",
+				{ actual, ask, controlsHeld, expected, targetRank },
+				partnerAskResponse
+			)
+		: wrong(
+				rule,
+				"GERBER_RESPONSE_WRONG_STEP",
+				{ actual, ask, controlsHeld, expected, targetRank },
+				partnerAskResponse
+			);
+}
+
 function evaluateGerber(rule: RuleDefinition, context: EvaluationContext) {
+	const responseVerdict = evaluateGerberResponse(rule, context);
+	if (responseVerdict) {
+		return responseVerdict;
+	}
+
 	const response = responseContext(context);
 	if (!(response?.action && response.openingBid?.strain === "NT")) {
 		return notApplicable(rule);
 	}
-	const call = normalizeCall(response.action.call);
+	const heroAsks = context.heroCalls.filter((candidate) => {
+		const candidateCall = normalizeCall(candidate.call);
+		return (
+			(candidateCall === "4C" &&
+				hasVariant(context, "A-RR-07", "4C ace ask")) ||
+			(candidateCall === "5C" && hasVariant(context, "A-RR-07", "5C king ask"))
+		);
+	});
+	const action = heroAsks.at(-1) ?? response.action;
+	const call = normalizeCall(action.call);
+	if (
+		(call === "4C" && !hasVariant(context, "A-RR-07", "4C ace ask")) ||
+		(call === "5C" && !hasVariant(context, "A-RR-07", "5C king ask"))
+	) {
+		return notApplicable(rule, "GERBER_VARIANT_NOT_ADOPTED");
+	}
 	const eligible =
 		context.points >= context.system.settings.responseRebid.gerberMinHcp;
+	if (call === "5C" && !priorGerberFourClubAsk(context, action)) {
+		return wrong(
+			rule,
+			"GERBER_KING_ASK_WITHOUT_ACE_SEQUENCE",
+			{ hcp: context.points },
+			action
+		);
+	}
 	if (["4C", "5C"].includes(call)) {
 		return eligible
 			? complied(
 					rule,
 					"GERBER_ASK_USED",
-					{ hcp: context.points },
-					response.action
+					{ ask: call, hcp: context.points },
+					action
 				)
 			: wrong(
 					rule,
 					"GERBER_OUTSIDE_SLAM_RANGE",
-					{ hcp: context.points },
-					response.action
+					{ ask: call, hcp: context.points },
+					action
 				);
 	}
 	return eligible
@@ -981,10 +1361,55 @@ function evaluateGerber(rule: RuleDefinition, context: EvaluationContext) {
 		: notApplicable(rule);
 }
 
+function evaluateGrandSlamForceResponse(
+	rule: RuleDefinition,
+	context: EvaluationContext
+): RuleEvaluationResult | undefined {
+	const ask = context.calls.find(
+		(candidate) =>
+			candidate.seat === partner(context.heroSeat) &&
+			normalizeCall(candidate.call) === "5NT" &&
+			!context.calls.some(
+				(prior) =>
+					prior.index < candidate.index &&
+					samePartnership(prior.seat, context.heroSeat) &&
+					normalizeCall(prior.call) === "4NT"
+			)
+	);
+	const action = ask ? heroCallAfter(context, ask.index) : undefined;
+	const fit = ask ? partnershipFit(context, ask.index) : undefined;
+	if (!(ask && action && fit)) {
+		return;
+	}
+	const holding = holdings(context.hand)[fit.strain];
+	const topHonors = [...holding].filter((rank) =>
+		["A", "K", "Q"].includes(rank)
+	).length;
+	const grandThreshold =
+		context.system.settings.responseRebid.grandSlamForceGrandTopHonors;
+	const expected = `${topHonors >= grandThreshold ? 7 : 6}${fit.strain}`;
+	const actual = normalizeCall(action.call);
+	const facts = {
+		actual,
+		expected,
+		grandThreshold,
+		holding,
+		topHonors,
+		trump: fit.strain,
+	};
+	return actual === expected
+		? complied(rule, "GRAND_SLAM_FORCE_RESPONSE_COMPLIED", facts, action)
+		: wrong(rule, "GRAND_SLAM_FORCE_RESPONSE_WRONG", facts, action);
+}
+
 function evaluateGrandSlamForce(
 	rule: RuleDefinition,
 	context: EvaluationContext
 ) {
+	const responseVerdict = evaluateGrandSlamForceResponse(rule, context);
+	if (responseVerdict) {
+		return responseVerdict;
+	}
 	const action = context.heroCalls.find(
 		(candidate) =>
 			normalizeCall(candidate.call) === "5NT" &&
@@ -1075,9 +1500,7 @@ function evaluateOneNtRange(rule: RuleDefinition, context: EvaluationContext) {
 			);
 		}
 	}
-	return rangeAllowed
-		? complied(rule, "NT_RANGE_ALLOWED", { oneNtMaxHcp, oneNtMinHcp })
-		: wrong(rule, "NT_RANGE_DISALLOWED", { oneNtMaxHcp, oneNtMinHcp });
+	return notApplicable(rule);
 }
 
 function evaluateFitShowingJump(
@@ -1119,17 +1542,21 @@ function evaluateFitShowingJump(
 		context.points >=
 			context.system.settings.responseRebid.fitShowingJumpMinHcp;
 	if (isJump) {
-		return support >= 3 && support + jumpLength >= 9
+		const minimumHcp =
+			context.system.settings.responseRebid.fitShowingJumpMinHcp;
+		return support >= 3 &&
+			support + jumpLength >= 9 &&
+			context.points >= minimumHcp
 			? complied(
 					rule,
-					"FIT_SHOWING_JUMP_SHAPE_MET",
-					{ jumpLength, support },
+					"FIT_SHOWING_JUMP_CONDITIONS_MET",
+					{ hcp: context.points, jumpLength, minimumHcp, support },
 					response.action
 				)
 			: wrong(
 					rule,
-					"FIT_SHOWING_JUMP_SHAPE_FAILED",
-					{ jumpLength, support },
+					"FIT_SHOWING_JUMP_CONDITIONS_FAILED",
+					{ hcp: context.points, jumpLength, minimumHcp, support },
 					response.action
 				);
 	}
@@ -1165,6 +1592,10 @@ function evaluateNaturalOvercall(
 	const isCue = Boolean(bid && openingBid && bid.strain === openingBid.strain);
 	if (bid && bid.strain !== "NT" && !isCue) {
 		const level = bid.level;
+		const variant = level === 1 ? "One-level" : "Two-level";
+		if (!hasVariant(context, "A-CD-01", variant)) {
+			return notApplicable(rule, "NATURAL_OVERCALL_VARIANT_NOT_ADOPTED");
+		}
 		const minimumHcp =
 			level === 1
 				? context.system.settings.overcall.oneLevelMinHcp
@@ -1215,6 +1646,21 @@ function unusualSuits(opening: Bid): Array<"C" | "D" | "H" | "S"> {
 		.slice(0, 2);
 }
 
+function unusualNtVariant(opening: Bid) {
+	return opening.strain === "S" || opening.strain === "H"
+		? "Minors"
+		: "Two lowest unbid";
+}
+
+function heroPassedBefore(context: EvaluationContext, action: AuctionCall) {
+	return context.calls.some(
+		(candidate) =>
+			candidate.index < action.index &&
+			candidate.seat === context.heroSeat &&
+			normalizeCall(candidate.call) === "PASS"
+	);
+}
+
 function evaluateUnusualNt(rule: RuleDefinition, context: EvaluationContext) {
 	const opening = opponentOpening(context);
 	const openingBid = opening ? parseBid(opening.call) : undefined;
@@ -1223,6 +1669,10 @@ function evaluateUnusualNt(rule: RuleDefinition, context: EvaluationContext) {
 		return notApplicable(rule);
 	}
 	const target = unusualSuits(openingBid);
+	const variant = unusualNtVariant(openingBid);
+	if (!hasVariant(context, "A-CD-02", variant)) {
+		return notApplicable(rule, "UNUSUAL_NT_VARIANT_NOT_ADOPTED");
+	}
 	const shape = target
 		.map((suit) => context.lengths[suit])
 		.sort((left, right) => right - left);
@@ -1232,14 +1682,10 @@ function evaluateUnusualNt(rule: RuleDefinition, context: EvaluationContext) {
 		longest: shape[0] ?? 0,
 		secondLongest: shape[1] ?? 0,
 		suits: target.join("+"),
+		variant,
 	};
 	const ntBid = parseBid(call);
-	const hasPreviouslyPassed = context.calls.some(
-		(candidate) =>
-			candidate.index < action.index &&
-			candidate.seat === context.heroSeat &&
-			normalizeCall(candidate.call) === "PASS"
-	);
+	const hasPreviouslyPassed = heroPassedBefore(context, action);
 	if (ntBid?.strain === "NT") {
 		const legalLevel = hasPreviouslyPassed || ntBid.level >= 2;
 		return eligible && legalLevel
@@ -1270,20 +1716,38 @@ function evaluateTakeoutDouble(
 	const opening = opponentOpening(context);
 	const openingBid = opening ? parseBid(opening.call) : undefined;
 	const action = opening ? responseAfter(context, opening) : undefined;
-	if (!(openingBid && openingBid.strain !== "NT" && action)) {
+	if (!(opening && openingBid && openingBid.strain !== "NT" && action)) {
 		return notApplicable(rule);
 	}
 	const otherLengths = (["S", "H", "D", "C"] as const)
 		.filter((suit) => suit !== openingBid.strain)
 		.map((suit) => context.lengths[suit]);
+	const callsBetween = context.calls.filter(
+		(candidate) =>
+			candidate.index > opening.index && candidate.index < action.index
+	);
+	const balancing =
+		callsBetween.length >= 2 &&
+		callsBetween
+			.slice(-2)
+			.every((candidate) => normalizeCall(candidate.call) === "PASS");
+	const variant = balancing ? "Balancing" : "Direct";
+	if (!(context.system.selectedVariants["A-CD-03"] ?? []).includes(variant)) {
+		return notApplicable(rule, "TAKEOUT_DOUBLE_VARIANT_NOT_ADOPTED");
+	}
+	const minimumHcp = balancing
+		? context.system.settings.competitive.balancingTakeoutDoubleMinHcp
+		: context.system.settings.competitive.takeoutDoubleMinHcp;
 	const eligible =
-		context.points >= context.system.settings.competitive.takeoutDoubleMinHcp &&
+		context.points >= minimumHcp &&
 		context.lengths[openingBid.strain] <= 2 &&
 		otherLengths.filter((length) => length >= 3).length >= 2;
 	const call = normalizeCall(action.call);
 	const facts = {
 		hcp: context.points,
+		minimumHcp,
 		opponentSuitLength: context.lengths[openingBid.strain],
+		variant,
 	};
 	if (call === "X") {
 		return eligible
@@ -1295,14 +1759,8 @@ function evaluateTakeoutDouble(
 		: notApplicable(rule);
 }
 
-function evaluateLightnerDouble(
-	rule: RuleDefinition,
-	context: EvaluationContext
-) {
-	const heroDouble = context.heroCalls.find(
-		(candidate) => normalizeCall(candidate.call) === "X"
-	);
-	const lastBid = context.calls.find((candidate) => {
+function opponentSlamCall(context: EvaluationContext) {
+	return context.calls.find((candidate) => {
 		const bid = parseBid(candidate.call);
 		return Boolean(
 			bid &&
@@ -1310,61 +1768,86 @@ function evaluateLightnerDouble(
 				!samePartnership(candidate.seat, context.heroSeat)
 		);
 	});
-	const action = lastBid ? heroCallAfter(context, lastBid.index) : undefined;
-	const bid = lastBid ? parseBid(lastBid.call) : undefined;
-	const call = action ? normalizeCall(action.call) : "";
-	const isOpponentSlam = Boolean(
-		lastBid &&
-			bid &&
-			bid.level >= 6 &&
-			!samePartnership(lastBid.seat, context.heroSeat) &&
-			bid.strain !== "NT"
+}
+
+function evaluateNonSlamLightnerDouble(
+	rule: RuleDefinition,
+	context: EvaluationContext
+) {
+	const heroDouble = context.heroCalls.find(
+		(candidate) => normalizeCall(candidate.call) === "X"
 	);
-	if (!lastBid && heroDouble) {
-		const priorContract = [...callsBefore(context, heroDouble)]
-			.reverse()
-			.find(
-				(candidate) =>
-					parseBid(candidate.call) &&
-					!samePartnership(candidate.seat, context.heroSeat)
-			);
-		const priorBid = priorContract ? parseBid(priorContract.call) : undefined;
-		if (priorBid && priorBid.level >= 4) {
-			return wrong(
+	if (!heroDouble) {
+		return notApplicable(rule);
+	}
+	const priorContract = [...callsBefore(context, heroDouble)]
+		.reverse()
+		.find(
+			(candidate) =>
+				parseBid(candidate.call) &&
+				!samePartnership(candidate.seat, context.heroSeat)
+		);
+	const priorBid = priorContract ? parseBid(priorContract.call) : undefined;
+	return priorBid && priorBid.level >= 4
+		? wrong(
 				rule,
 				"LIGHTNER_DOUBLE_NOT_OVER_SLAM",
 				{ contract: normalizeCall(priorContract?.call ?? "") },
 				heroDouble
-			);
-		}
+			)
+		: notApplicable(rule);
+}
+
+function evaluateLightnerDouble(
+	rule: RuleDefinition,
+	context: EvaluationContext
+) {
+	const slam = opponentSlamCall(context);
+	if (!slam) {
+		return evaluateNonSlamLightnerDouble(rule, context);
 	}
+	const action = heroCallAfter(context, slam.index);
+	const bid = parseBid(slam.call);
+	const call = action ? normalizeCall(action.call) : "";
+	const isSuitSlam = bid?.strain !== "NT";
+	const requireVoid = context.system.settings.competitive.lightnerRequireVoid;
+	const voidSuit = (["S", "H", "D", "C"] as const).find(
+		(suit) => suit !== bid?.strain && context.lengths[suit] === 0
+	);
 	if (call === "X") {
-		return isOpponentSlam
+		return isSuitSlam && (!requireVoid || Boolean(voidSuit))
 			? complied(
 					rule,
 					"LIGHTNER_DOUBLE_USED",
-					{ contract: normalizeCall(lastBid?.call ?? "") },
+					{
+						contract: normalizeCall(slam.call),
+						requireVoid,
+						voidSuit: voidSuit ?? null,
+					},
 					action
 				)
 			: wrong(
 					rule,
-					"LIGHTNER_DOUBLE_NOT_OVER_SLAM",
-					{ contract: normalizeCall(lastBid?.call ?? "") },
+					isSuitSlam
+						? "LIGHTNER_DOUBLE_WITHOUT_REQUIRED_VOID"
+						: "LIGHTNER_DOUBLE_NOT_OVER_SLAM",
+					{
+						contract: normalizeCall(slam.call),
+						requireVoid,
+						voidSuit: voidSuit ?? null,
+					},
 					action
 				);
 	}
-	if (!isOpponentSlam) {
+	if (!isSuitSlam) {
 		return notApplicable(rule);
 	}
-	if (!context.system.settings.competitive.lightnerRequireVoid) {
+	if (!requireVoid) {
 		return indeterminate(
 			rule,
 			"LIGHTNER_LEAD_REQUEST_NOT_OBJECTIVELY_DETERMINABLE"
 		);
 	}
-	const voidSuit = (["S", "H", "D", "C"] as const).find(
-		(suit) => suit !== bid?.strain && context.lengths[suit] === 0
-	);
 	return voidSuit
 		? missed(
 				rule,
@@ -1623,6 +2106,20 @@ function evaluateSignals(rule: RuleDefinition, context: EvaluationContext) {
 				lead.card[0] === action.card[0]
 		);
 	});
+	const variantByPriority = {
+		ATTITUDE: "Normal attitude",
+		COUNT: "Count",
+		SUIT_PREFERENCE: "Suit preference",
+	} as const;
+	const signalPriority = context.system.settings.signal.priority.find(
+		(signal) => hasVariant(context, "A-CA-02", variantByPriority[signal])
+	);
+	if (signalPriority !== "COUNT") {
+		return indeterminate(rule, "ATTITUDE_OR_PREFERENCE_INTENT_NOT_OBJECTIVE", {
+			heroPlayCount: heroPlays.length,
+			signalPriority: signalPriority ?? "UNSET",
+		});
+	}
 	for (const suit of suitOrder) {
 		const cards = countActions.filter((action) => action.card[0] === suit);
 		if (cards.length < 2 || original[suit].length < 2) {

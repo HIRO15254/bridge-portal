@@ -92,6 +92,19 @@ const takeoutHearts = "KQJ9.32.AQJ9.KQJ";
 const fitShowing = "KQJT98.A32.32.32";
 const supportSpades = "KQ3.AJ32.432.32";
 const cueStrong = "AKQJ.AKQJ.432.32";
+const countSignalSystemOverride = {
+	settings: {
+		...defaultSystemSettings,
+		signal: {
+			...defaultSystemSettings.signal,
+			priority: ["COUNT", "ATTITUDE", "SUIT_PREFERENCE"] as [
+				"COUNT",
+				"ATTITUDE",
+				"SUIT_PREFERENCE",
+			],
+		},
+	},
+};
 
 type ThreeVerdictFixtures = Record<
 	OfficialItemId,
@@ -442,7 +455,7 @@ const fixtures: ThreeVerdictFixtures = {
 				["E", "6S"],
 				["N", "X"],
 			],
-			heroHand: weak,
+			heroHand: "AKQJ.432.AKQJT9.",
 		}),
 		missed: scenario({
 			calls: [
@@ -589,6 +602,7 @@ const fixtures: ThreeVerdictFixtures = {
 				{ card: "S3", index: 4, seat: "W", trickNumber: 2 },
 				{ card: "S8", index: 5, seat: "N", trickNumber: 2 },
 			],
+			systemOverride: countSignalSystemOverride,
 		}),
 		missed: scenario({
 			heroHand: "98.AKQJ.432.4321",
@@ -596,6 +610,7 @@ const fixtures: ThreeVerdictFixtures = {
 				{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
 				{ card: "S9", index: 1, seat: "N", trickNumber: 1 },
 			],
+			systemOverride: countSignalSystemOverride,
 		}),
 		wrong: scenario({
 			heroHand: "98.AKQJ.432.4321",
@@ -605,6 +620,7 @@ const fixtures: ThreeVerdictFixtures = {
 				{ card: "S3", index: 4, seat: "W", trickNumber: 2 },
 				{ card: "S9", index: 5, seat: "N", trickNumber: 2 },
 			],
+			systemOverride: countSignalSystemOverride,
 		}),
 	},
 };

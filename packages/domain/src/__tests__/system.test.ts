@@ -53,7 +53,9 @@ describe("system settings", () => {
 		const normalized = normalizeSystemSettings(legacySettings);
 
 		expect(normalized.competitive.takeoutDoubleMinHcp).toBe(12);
+		expect(normalized.competitive.balancingTakeoutDoubleMinHcp).toBe(9);
 		expect(normalized.responseRebid.blackwoodMinHcp).toBe(16);
+		expect(normalized.responseRebid.weakTwoFeatureMinimumHonor).toBe("K");
 	});
 
 	it("accepts a complete List A draft including all three strong 2C definitions", () => {
@@ -117,6 +119,21 @@ describe("system settings", () => {
 
 		expect(validateSystemDraft(draft).map((issue) => issue.code)).toContain(
 			"CONFLICT"
+		);
+	});
+
+	it("rejects convention continuations without their prerequisite variant", () => {
+		const draft = validDraft();
+		draft.selectedVariants["A-OB-01"] = ["Rule of 10"];
+		draft.selectedVariants["A-RR-06"] = ["5NT king ask"];
+		draft.selectedVariants["A-RR-07"] = ["5C king ask"];
+
+		const issues = validateSystemDraft(draft).filter(
+			(issue) => issue.code === "MISSING_VARIANT"
+		);
+
+		expect(issues.map((issue) => issue.officialItemId)).toEqual(
+			expect.arrayContaining(["A-OB-01", "A-RR-06", "A-RR-07"])
 		);
 	});
 });

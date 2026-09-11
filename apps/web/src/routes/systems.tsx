@@ -223,11 +223,29 @@ function SystemEditor({
 						data,
 						"responderRebidNewSuitMinLength"
 					),
+					staymanBothMajorsResponse: String(
+						data.get("staymanBothMajorsResponse")
+					) as "H" | "S",
 					weakResponseMaxHcp: numberValue(data, "weakResponseMaxHcp"),
 					weakTwoInquiryMinHcp: numberValue(data, "weakTwoInquiryMinHcp"),
+					weakTwoFeatureMinimumHonor: String(
+						data.get("weakTwoFeatureMinimumHonor")
+					) as "A" | "K",
+					weakTwoOgustMaximumMinHcp: numberValue(
+						data,
+						"weakTwoOgustMaximumMinHcp"
+					),
+					weakTwoOgustGoodSuitTopHonors: numberValue(
+						data,
+						"weakTwoOgustGoodSuitTopHonors"
+					),
 					blackwoodMinHcp: numberValue(data, "blackwoodMinHcp"),
 					gerberMinHcp: numberValue(data, "gerberMinHcp"),
 					grandSlamForceMinHcp: numberValue(data, "grandSlamForceMinHcp"),
+					grandSlamForceGrandTopHonors: numberValue(
+						data,
+						"grandSlamForceGrandTopHonors"
+					),
 					fitShowingJumpMinHcp: numberValue(data, "fitShowingJumpMinHcp"),
 				},
 				overcall: {
@@ -238,6 +256,10 @@ function SystemEditor({
 				},
 				competitive: {
 					takeoutDoubleMinHcp: numberValue(data, "takeoutDoubleMinHcp"),
+					balancingTakeoutDoubleMinHcp: numberValue(
+						data,
+						"balancingTakeoutDoubleMinHcp"
+					),
 					negativeDoubleMinHcp: numberValue(data, "negativeDoubleMinHcp"),
 					sosRedoubleMaxHcp: numberValue(data, "sosRedoubleMaxHcp"),
 					gameForcingCueMinHcp: numberValue(data, "gameForcingCueMinHcp"),
@@ -341,6 +363,16 @@ function SystemEditor({
 			draft.settings.responseRebid.weakTwoInquiryMinHcp,
 		],
 		[
+			"weakTwoOgustMaximumMinHcp",
+			"Ogust maximum 下限HCP",
+			draft.settings.responseRebid.weakTwoOgustMaximumMinHcp,
+		],
+		[
+			"weakTwoOgustGoodSuitTopHonors",
+			"Ogust good suitのAKQ枚数",
+			draft.settings.responseRebid.weakTwoOgustGoodSuitTopHonors,
+		],
+		[
 			"blackwoodMinHcp",
 			"Blackwood目安HCP",
 			draft.settings.responseRebid.blackwoodMinHcp,
@@ -354,6 +386,11 @@ function SystemEditor({
 			"grandSlamForceMinHcp",
 			"Grand Slam Force目安HCP",
 			draft.settings.responseRebid.grandSlamForceMinHcp,
+		],
+		[
+			"grandSlamForceGrandTopHonors",
+			"GSFで7を返すトップアナー枚数",
+			draft.settings.responseRebid.grandSlamForceGrandTopHonors,
 		],
 		[
 			"fitShowingJumpMinHcp",
@@ -384,6 +421,11 @@ function SystemEditor({
 			"takeoutDoubleMinHcp",
 			"Takeout Double下限",
 			draft.settings.competitive.takeoutDoubleMinHcp,
+		],
+		[
+			"balancingTakeoutDoubleMinHcp",
+			"Balancing Takeout Double下限",
+			draft.settings.competitive.balancingTakeoutDoubleMinHcp,
 		],
 		[
 			"negativeDoubleMinHcp",
@@ -431,6 +473,30 @@ function SystemEditor({
 							/>
 						</label>
 					))}
+					<label>
+						Stayman 両4枚メジャー応答
+						<select
+							defaultValue={
+								draft.settings.responseRebid.staymanBothMajorsResponse
+							}
+							name="staymanBothMajorsResponse"
+						>
+							<option value="H">2♥</option>
+							<option value="S">2♠</option>
+						</select>
+					</label>
+					<label>
+						Feature ask 最低アナー
+						<select
+							defaultValue={
+								draft.settings.responseRebid.weakTwoFeatureMinimumHonor
+							}
+							name="weakTwoFeatureMinimumHonor"
+						>
+							<option>A</option>
+							<option>K</option>
+						</select>
+					</label>
 					<label>
 						A/K from AK
 						<select defaultValue={draft.settings.lead.fromAk} name="fromAk">

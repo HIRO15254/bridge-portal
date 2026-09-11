@@ -180,7 +180,7 @@ describe("statistics queries", () => {
 				id: "run-active-latest",
 				boardAttemptId: "board-active",
 				rulesetVersion: "JCBL_LIST_A_2026_05_01",
-				ruleEngineVersion: "2.1.0",
+				ruleEngineVersion: "2.2.0",
 				completedAt: new Date("2026-05-03T00:00:00Z"),
 			},
 		]);

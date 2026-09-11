@@ -83,7 +83,7 @@ test("Rule学習から実戦Boardへの往復まで完走する", async ({ page,
 	);
 
 	await page.getByRole("link", { name: "Statistics" }).click();
-	await expect(page.getByText("Engine 2.1.0")).toBeVisible();
+	await expect(page.getByText("Engine 2.2.0")).toBeVisible();
 	await expect(page.locator(".stats-table .table-row").first()).toBeVisible();
 
 	await page.goto(boardUrl);
