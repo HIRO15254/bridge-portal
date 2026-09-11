@@ -26,13 +26,14 @@ const errors: string[] = [];
 for await (const file of new Glob(
 	"{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx}"
 ).scan(root)) {
-	if (file.split("/").includes("node_modules")) {
+	const normalizedFile = file.replaceAll("\\", "/");
+	if (normalizedFile.split("/").includes("node_modules")) {
 		continue;
 	}
-	const projects = assignments.get(file) ?? [];
+	const projects = assignments.get(normalizedFile) ?? [];
 	if (projects.length !== 1) {
 		errors.push(
-			`${file}: expected one Vitest project, found ${projects.join(", ") || "none"}`
+			`${normalizedFile}: expected one Vitest project, found ${projects.join(", ") || "none"}`
 		);
 	}
 }

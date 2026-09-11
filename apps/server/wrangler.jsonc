@@ -20,7 +20,7 @@
     {
       "binding": "DB",
       "database_name": "bridge-portal-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "486082d0-30b7-4f98-8c31-f59a12bca1cd",
       "migrations_dir": "../../packages/db/src/migrations"
     }
   ]
