@@ -366,7 +366,7 @@ function naturalOpeningCandidate(
 	const suitCalls = [4, 3, 2, 1].flatMap((level) =>
 		(["S", "H", "D", "C"] as const).map((suit) => `${level}${suit}`)
 	);
-	return ["1NT", "2NT", "3NT", ...suitCalls].find((call) => {
+	return ["1NT", "2NT", "3NT", "4NT", ...suitCalls].find((call) => {
 		const bid = parseBid(call);
 		const agreement = bid ? naturalOpeningAgreement(context, bid) : undefined;
 		return agreement?.adopted && agreement.valid;
@@ -438,7 +438,16 @@ function naturalNtOpeningAgreement(
 			variant: "Natural 3NT",
 		},
 	};
-	const profile = profiles[bid.level];
+	const profile =
+		profiles[bid.level] ??
+		(bid.level >= 4
+			? {
+					allowSingletonTopHonor: false,
+					maximum: opening.fourPlusNtMaxHcp,
+					minimum: opening.fourPlusNtMinHcp,
+					variant: "Natural 4+-level NT",
+				}
+			: undefined);
 	if (!profile) {
 		return;
 	}

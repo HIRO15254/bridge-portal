@@ -89,6 +89,7 @@ describe("priority evaluator boundaries", () => {
 
 	it.each([
 		["Natural 2NT shape", "AKQJT9.AKQ.J2.32", "2NT"],
+		["Natural 4+-level NT range", "AKQJ.AKQ.J32.432", "4NT"],
 		["Natural 3-level range", "32.AKQJT98.Q2.32", "3H"],
 		["Natural 4+-level length", "KQJT987.432.Q2.2", "5S"],
 	] as const)("rejects an opening outside the configured %s", (_case, hand, call) => {
@@ -106,6 +107,18 @@ describe("priority evaluator boundaries", () => {
 
 		expect(verdict.automaticVerdict).toBe("DEVIATED_MISSED_OPPORTUNITY");
 		expect(verdict.facts).toMatchObject({ expected: "4S" });
+	});
+
+	it("recognizes a missed natural 4NT-or-higher opening", () => {
+		const verdict = evaluateOfficialItem(
+			"A-OB-01",
+			input("AKQJ.AKQJ.AKQ.32", [["N", "PASS"]], {
+				adoptedOfficialItemIds: allIds.filter((id) => id !== "A-OB-02"),
+			})
+		);
+
+		expect(verdict.automaticVerdict).toBe("DEVIATED_MISSED_OPPORTUNITY");
+		expect(verdict.facts).toMatchObject({ expected: "4NT" });
 	});
 
 	it("leads the second-highest card with MUD from three or more small cards", () => {
@@ -170,6 +183,7 @@ describe("priority evaluator boundaries", () => {
 		["Natural Strong Two", "32.AKQJT.AKQ.J32", "2H"],
 		["Natural 2NT", "AKQJ.AKQ.J32.432", "2NT"],
 		["Natural 3NT", "AKQJ.AKQ.AJ2.432", "3NT"],
+		["Natural 4+-level NT", "AKQJ.AKQJ.AKQ.32", "6NT"],
 		["Natural 3-level", "32.KQJT987.Q2.32", "3H"],
 		["Natural 4+-level", "KQJT9876.32.Q2.2", "5S"],
 	] as const)("evaluates the configured %s opening", (_variant, hand, call) => {

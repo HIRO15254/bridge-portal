@@ -284,6 +284,11 @@ function validateSettingsRanges(
 		["2NT", settings.opening.twoNtMinHcp, settings.opening.twoNtMaxHcp],
 		["3NT", settings.opening.threeNtMinHcp, settings.opening.threeNtMaxHcp],
 		[
+			"4+-level NT",
+			settings.opening.fourPlusNtMinHcp,
+			settings.opening.fourPlusNtMaxHcp,
+		],
+		[
 			"3-level",
 			settings.opening.threeLevelMinHcp,
 			settings.opening.threeLevelMaxHcp,

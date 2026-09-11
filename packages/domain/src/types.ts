@@ -49,6 +49,8 @@ export interface BridgeDeal {
 export const systemSettingsSchema = z.object({
 	opening: z.object({
 		allowSingletonTopHonor: z.boolean(),
+		fourPlusNtMaxHcp: z.number().int().min(0).max(37),
+		fourPlusNtMinHcp: z.number().int().min(0).max(37),
 		fourPlusLevelMaxHcp: z.number().int().min(0).max(37),
 		fourPlusLevelMinHcp: z.number().int().min(0).max(37),
 		fourPlusLevelMinLength: z.number().int().min(4).max(13),
@@ -124,6 +126,8 @@ export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 export const defaultSystemSettings: SystemSettings = {
 	opening: {
 		allowSingletonTopHonor: false,
+		fourPlusNtMaxHcp: 37,
+		fourPlusNtMinHcp: 28,
 		fourPlusLevelMaxHcp: 14,
 		fourPlusLevelMinHcp: 5,
 		fourPlusLevelMinLength: 8,

@@ -13,6 +13,7 @@ const EXPECTED_VARIANTS = {
 		"Natural 1NT",
 		"Natural 2NT",
 		"Natural 3NT",
+		"Natural 4+-level NT",
 		"Natural Strong Two",
 		"Weak Two",
 		"Natural 3-level",

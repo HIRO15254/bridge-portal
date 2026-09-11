@@ -48,6 +48,8 @@ describe("system settings", () => {
 		);
 		const {
 			allowSingletonTopHonor: _singleton,
+			fourPlusNtMaxHcp: _fourPlusNtMax,
+			fourPlusNtMinHcp: _fourPlusNtMin,
 			fourPlusLevelMaxHcp: _fourPlusMax,
 			fourPlusLevelMinHcp: _fourPlusMin,
 			fourPlusLevelMinLength: _fourPlusLength,
@@ -74,6 +76,7 @@ describe("system settings", () => {
 		expect(normalized.competitive.takeoutDoubleMinHcp).toBe(12);
 		expect(normalized.competitive.balancingTakeoutDoubleMinHcp).toBe(9);
 		expect(normalized.opening.allowSingletonTopHonor).toBe(false);
+		expect(normalized.opening.fourPlusNtMinHcp).toBe(28);
 		expect(normalized.opening.naturalStrongTwoMinLength).toBe(5);
 		expect(normalized.opening.threeLevelMinHcp).toBe(5);
 		expect(normalized.opening.twoNtMaxHcp).toBe(22);
@@ -130,6 +133,8 @@ describe("system settings", () => {
 		draft.settings.opening.oneNtMaxHcp = 15;
 		draft.settings.opening.threeLevelMinHcp = 11;
 		draft.settings.opening.threeLevelMaxHcp = 10;
+		draft.settings.opening.fourPlusNtMinHcp = 37;
+		draft.settings.opening.fourPlusNtMaxHcp = 36;
 		draft.settings.signal.priority = ["ATTITUDE", "ATTITUDE", "COUNT"];
 
 		const issues = validateSystemDraft(draft);
@@ -138,6 +143,9 @@ describe("system settings", () => {
 		);
 		expect(
 			issues.some((issue) => issue.message.includes("3-level Opening"))
+		).toBe(true);
+		expect(
+			issues.some((issue) => issue.message.includes("4+-level NT Opening"))
 		).toBe(true);
 	});
 

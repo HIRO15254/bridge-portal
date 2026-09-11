@@ -201,6 +201,8 @@ function SystemEditor({
 			settings: {
 				opening: {
 					allowSingletonTopHonor: data.has("allowSingletonTopHonor"),
+					fourPlusNtMaxHcp: numberValue(data, "fourPlusNtMaxHcp"),
+					fourPlusNtMinHcp: numberValue(data, "fourPlusNtMinHcp"),
 					fourPlusLevelMaxHcp: numberValue(data, "fourPlusLevelMaxHcp"),
 					fourPlusLevelMinHcp: numberValue(data, "fourPlusLevelMinHcp"),
 					fourPlusLevelMinLength: numberValue(data, "fourPlusLevelMinLength"),
@@ -337,6 +339,16 @@ function SystemEditor({
 			"threeNtMaxHcp",
 			"Natural 3NT 上限HCP",
 			draft.settings.opening.threeNtMaxHcp,
+		],
+		[
+			"fourPlusNtMinHcp",
+			"Natural 4NT以上 下限HCP",
+			draft.settings.opening.fourPlusNtMinHcp,
+		],
+		[
+			"fourPlusNtMaxHcp",
+			"Natural 4NT以上 上限HCP",
+			draft.settings.opening.fourPlusNtMaxHcp,
 		],
 		[
 			"naturalStrongTwoMinHcp",
