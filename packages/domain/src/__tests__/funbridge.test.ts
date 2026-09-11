@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { dealToPbn, parseFunbridgeJson } from "../funbridge";
 import bpCircuitFixture from "./fixtures/funbridge-bp-circuit.json";
+import capturedBpCircuitFixture from "./fixtures/funbridge-bp-circuit-captured-anonymized.json";
 import dailyFixture from "./fixtures/funbridge-daily.json";
 import seriesFixture from "./fixtures/funbridge-series.json";
 
@@ -35,6 +36,43 @@ describe("Funbridge JSON import profile", () => {
 			"BOARD_7_PLAY_INCOMPLETE",
 		]);
 		expect(parsed.boards[0]?.playComplete).toBe(false);
+	});
+
+	it("normalizes an anonymized BP Circuit capture with a complete legal play", () => {
+		const parsed = parseFunbridgeJson(JSON.stringify(capturedBpCircuitFixture));
+		const board = parsed.boards[0];
+
+		expect(parsed.family).toBe("BP_CIRCUIT");
+		expect(parsed.familyMetadata).toEqual({
+			awarded: null,
+			eventType: "EXPRESS",
+			level: "100",
+			multiplier: 1,
+		});
+		expect(parsed.warnings).toEqual([]);
+		expect(board?.playComplete).toBe(true);
+		expect(board?.auction?.map(({ call }) => call)).toEqual([
+			"1C",
+			"PASS",
+			"PASS",
+			"X",
+			"PASS",
+			"1D",
+			"PASS",
+			"2C",
+			"PASS",
+			"2S",
+			"PASS",
+			"PASS",
+			"PASS",
+		]);
+		expect(board?.play).toHaveLength(52);
+		expect(board?.play?.at(-1)).toEqual({
+			card: "HJ",
+			index: 51,
+			seat: "W",
+			trickNumber: 13,
+		});
 	});
 
 	it("rejects a family without its required metadata", () => {

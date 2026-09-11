@@ -46,7 +46,7 @@ bun run auth:bootstrap
 
 取込ファイルは`format: "FUNBRIDGE_EXPORT"`、`formatVersion: 1`とし、Tournament、Board、Auction、Playを含むBridge Portal標準の交換プロファイルです。正式なFamilyは`BP_CIRCUIT`、`DAILY`、`SERIES`のみで、それぞれBP、地域、Series期間・昇降格の固有メタデータが必須です。完全な例は[`packages/domain/src/__tests__/fixtures`](./packages/domain/src/__tests__/fixtures)にあります。各手13枚・52枚一意性、action index、trick番号、Playカードの所有席を取込前に検証します。PBN、LIN、USEBIOからのインポートはMVP対象外です。
 
-このプロファイルはFunbridge社が公開する公式エクスポート仕様ではありません。外部取得処理は取得データをこの形へ変換して出力する前提です。リポジトリの3 Family fixtureは仕様準拠の合成データであり、実際に取得したファイルとの互換性確認には匿名化した実サンプルが必要です。
+このプロファイルはFunbridge社が公開する公式エクスポート仕様ではありません。外部取得処理は取得データをこの形へ変換して出力する前提です。3 Familyの基本fixtureは仕様準拠の合成データです。加えて、Web版の読取専用リプレイから取得し、アカウント・大会識別子と大会順位を除去したBP Circuit fixtureで、実際の52アクションを継続検証します。
 
 ## Deployment
 
