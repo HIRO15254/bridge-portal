@@ -34,14 +34,17 @@ function input(
 			adoptedOfficialItemIds: allIds,
 			name: "Boundary",
 			rulesetVersion: JCBL_RULESET_VERSION,
-			selectedVariants: Object.fromEntries(
-				JCBL_LIST_A_2026_05_01.map((rule) => [
-					rule.officialItemId,
-					[...rule.variants],
-				])
-			),
 			settings: defaultSystemSettings,
 			...systemOverrides,
+			selectedVariants: {
+				...Object.fromEntries(
+					JCBL_LIST_A_2026_05_01.map((rule) => [
+						rule.officialItemId,
+						[...rule.variants],
+					])
+				),
+				...systemOverrides.selectedVariants,
+			},
 		},
 	};
 }
@@ -655,6 +658,44 @@ describe("priority evaluator boundaries", () => {
 			feature: "S",
 			inquiryVariant: "Feature ask",
 		});
+	});
+
+	it("separates a Weak Two inquiry from the weak response to a Natural Strong Two", () => {
+		const calls: [Seat, string][] = [
+			["S", "2H"],
+			["W", "PASS"],
+			["N", "2NT"],
+		];
+		const weakOpening = input("KQ32.AJ32.432.32", calls);
+		weakOpening.deal.hands.S = "32.KQJT98.432.32";
+		const strongOpening = input("9876.765.432.432", calls);
+		strongOpening.deal.hands.S = "32.AKQJT.AKQ.J32";
+
+		expect(evaluateOfficialItem("A-RR-05", weakOpening).automaticVerdict).toBe(
+			"COMPLIED"
+		);
+		expect(evaluateOfficialItem("A-RR-04", weakOpening).automaticVerdict).toBe(
+			"NOT_APPLICABLE"
+		);
+		expect(
+			evaluateOfficialItem("A-RR-04", strongOpening).automaticVerdict
+		).toBe("COMPLIED");
+		expect(
+			evaluateOfficialItem("A-RR-05", strongOpening).automaticVerdict
+		).toBe("NOT_APPLICABLE");
+	});
+
+	it("does not classify an invalid short 2H opening as Weak Two", () => {
+		const evaluationInput = input("KQ32.AJ32.432.32", [
+			["S", "2H"],
+			["W", "PASS"],
+			["N", "2NT"],
+		]);
+		evaluationInput.deal.hands.S = "KQ32.JT98.432.32";
+
+		expect(
+			evaluateOfficialItem("A-RR-05", evaluationInput).automaticVerdict
+		).toBe("NOT_APPLICABLE");
 	});
 
 	it("evaluates the configured Stayman response with both four-card majors", () => {

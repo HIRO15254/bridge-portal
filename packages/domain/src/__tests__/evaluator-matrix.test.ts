@@ -84,7 +84,7 @@ function scenario({
 
 const weak = "9876.765.432.432";
 const invitational = "KQ32.AJ32.432.32";
-const strong = "AKQJ.AKQJ.AK.432";
+const strong = "32.AKQJT.AKQ.J32";
 const weakTwoSpades = "KQJT98.432.32.32";
 const overcallSpades = "KQJT9.A32.432.32";
 const unusualMinors = "32.32.KQJ98.AQJT";

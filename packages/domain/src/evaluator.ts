@@ -296,6 +296,42 @@ function naturalOpeningMinLength(
 	return context.system.settings.opening.oneMajorMinLength;
 }
 
+function weakTwoHandQualifies(
+	context: EvaluationContext,
+	hand: string,
+	strain: "C" | "D" | "H" | "S"
+): boolean {
+	const { opening } = context.system.settings;
+	const points = hcp(hand);
+	const length = holdings(hand)[strain].length;
+	const ruleOfTenMet =
+		!hasVariant(context, "A-OB-01", "Rule of 10") || points + length >= 10;
+	return (
+		hasVariant(context, "A-OB-01", "Weak Two") &&
+		points >= opening.weakTwoMinHcp &&
+		points <= opening.weakTwoMaxHcp &&
+		length >= 5 &&
+		ruleOfTenMet &&
+		(strain !== "C" ||
+			!context.system.adoptedOfficialItemIds.includes("A-OB-02"))
+	);
+}
+
+function naturalStrongTwoHandQualifies(
+	context: EvaluationContext,
+	hand: string,
+	strain: "C" | "D" | "H" | "S"
+): boolean {
+	const { opening } = context.system.settings;
+	return (
+		hasVariant(context, "A-OB-01", "Natural Strong Two") &&
+		hcp(hand) >= opening.naturalStrongTwoMinHcp &&
+		holdings(hand)[strain].length >= opening.naturalStrongTwoMinLength &&
+		(strain !== "C" ||
+			!context.system.adoptedOfficialItemIds.includes("A-OB-02"))
+	);
+}
+
 function naturalResponseMinLength(bid: Bid): number {
 	if (bid.strain === "NT") {
 		return 0;
@@ -427,24 +463,13 @@ function naturalTwoSuitOpeningAgreement(
 	) {
 		return;
 	}
-	const { opening } = context.system.settings;
-	const length = bidSuitLength(context, bid);
 	const strongAdopted = hasVariant(context, "A-OB-01", "Natural Strong Two");
 	const weakAdopted = hasVariant(context, "A-OB-01", "Weak Two");
-	const ruleOfTenMet =
-		!hasVariant(context, "A-OB-01", "Rule of 10") ||
-		context.points + length >= 10;
 	return {
 		adopted: strongAdopted || weakAdopted,
 		valid:
-			(strongAdopted &&
-				context.points >= opening.naturalStrongTwoMinHcp &&
-				length >= opening.naturalStrongTwoMinLength) ||
-			(weakAdopted &&
-				context.points >= opening.weakTwoMinHcp &&
-				context.points <= opening.weakTwoMaxHcp &&
-				length >= 5 &&
-				ruleOfTenMet),
+			naturalStrongTwoHandQualifies(context, context.hand, bid.strain) ||
+			weakTwoHandQualifies(context, context.hand, bid.strain),
 	};
 }
 
@@ -616,10 +641,11 @@ function isWeakTwoInquiryAsk(
 	if (partnerCall !== "2NT" || openingBid.level !== 2) {
 		return false;
 	}
-	const openingAgreement = naturalOpeningAgreement(context, openingBid);
+	if (openingBid.strain === "NT") {
+		return false;
+	}
 	return Boolean(
-		openingAgreement?.adopted &&
-			openingAgreement.valid &&
+		weakTwoHandQualifies(context, context.hand, openingBid.strain) &&
 			(context.system.selectedVariants["A-RR-05"] ?? []).some((variant) =>
 				["Feature ask", "Ogust-style ask"].includes(variant)
 			)
@@ -1013,8 +1039,9 @@ function evaluateWeakTwoNtToStrongTwo(
 	) {
 		return notApplicable(rule);
 	}
-	const openerPoints = hcp(context.input.deal.hands[response.opening.seat]);
-	if (openerPoints < context.system.settings.opening.naturalStrongTwoMinHcp) {
+	const openingStrain = response.openingBid.strain as "D" | "H" | "S";
+	const openerHand = context.input.deal.hands[response.opening.seat];
+	if (!naturalStrongTwoHandQualifies(context, openerHand, openingStrain)) {
 		return notApplicable(rule, "OPENING_CLASSIFIED_AS_WEAK_TWO");
 	}
 	const call = normalizeCall(response.action.call);
@@ -1117,6 +1144,9 @@ function evaluateWeakTwoInquiryResponse(
 	) {
 		return;
 	}
+	if (!weakTwoHandQualifies(context, context.hand, heroOpeningBid.strain)) {
+		return notApplicable(rule, "OPENING_NOT_CLASSIFIED_AS_WEAK_TWO");
+	}
 	const partnerInquiry = context.calls.find(
 		(candidate) =>
 			candidate.index > heroOpening.index &&
@@ -1180,8 +1210,9 @@ function evaluateWeakTwoInquiry(
 	) {
 		return notApplicable(rule);
 	}
-	const openerPoints = hcp(context.input.deal.hands[response.opening.seat]);
-	if (openerPoints > context.system.settings.opening.weakTwoMaxHcp) {
+	const openingStrain = response.openingBid.strain as "D" | "H" | "S";
+	const openerHand = context.input.deal.hands[response.opening.seat];
+	if (!weakTwoHandQualifies(context, openerHand, openingStrain)) {
 		return notApplicable(rule, "OPENING_CLASSIFIED_AS_STRONG_TWO");
 	}
 	const call = normalizeCall(response.action.call);
