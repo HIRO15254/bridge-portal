@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { registrationErrorMessage } from "@/lib/auth-error";
 import { authClient, registrationIsAvailable } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
@@ -87,7 +88,7 @@ function Login() {
 			if (result.error) {
 				setError(
 					mode === "register"
-						? "登録できませんでした。入力内容を確認するか、ログインしてください。"
+						? registrationErrorMessage(result.error)
 						: "メールアドレスまたはパスワードを確認してください。"
 				);
 			} else {
@@ -138,6 +139,7 @@ function Login() {
 						autoComplete={
 							mode === "register" ? "new-password" : "current-password"
 						}
+						maxLength={mode === "register" ? 128 : undefined}
 						minLength={mode === "register" ? 12 : undefined}
 						name="password"
 						required
@@ -149,6 +151,7 @@ function Login() {
 						パスワード（確認）
 						<input
 							autoComplete="new-password"
+							maxLength={128}
 							minLength={12}
 							name="passwordConfirmation"
 							required
@@ -156,7 +159,11 @@ function Login() {
 						/>
 					</label>
 				)}
-				{error && <p className="error">{error}</p>}
+				{error && (
+					<p aria-live="polite" className="error">
+						{error}
+					</p>
+				)}
 				<Button disabled={pending} type="submit">
 					{submitLabel}
 				</Button>

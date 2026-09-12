@@ -89,6 +89,26 @@ describe("stored MVP workflow", () => {
 		);
 		expect(openRegistration.status).toBe(200);
 		await expect(openRegistration.json()).resolves.toEqual({ available: true });
+		const weakPassword = await app.request(
+			"/api/auth/sign-up/email",
+			{
+				body: JSON.stringify({
+					email: "weak-password@example.test",
+					name: "Weak password",
+					password: "too-short",
+				}),
+				headers: {
+					"Content-Type": "application/json",
+					Origin: bindingsConfig.CORS_ORIGIN,
+				},
+				method: "POST",
+			},
+			bindings
+		);
+		expect(weakPassword.status).toBe(400);
+		await expect(weakPassword.json()).resolves.toMatchObject({
+			code: "PASSWORD_TOO_SHORT",
+		});
 		const bootstrap = await app.request(
 			"/api/bootstrap",
 			{

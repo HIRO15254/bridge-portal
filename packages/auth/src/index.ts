@@ -93,6 +93,7 @@ export function createAuth(
 		emailAndPassword: {
 			enabled: true,
 			disableSignUp: !options.allowSignUp,
+			maxPasswordLength: 128,
 			minPasswordLength: 12,
 			password: { hash: hashPassword, verify: verifyPassword },
 		},
