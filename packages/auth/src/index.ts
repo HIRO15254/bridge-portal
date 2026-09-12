@@ -2,6 +2,9 @@ import { account, session, user, verification } from "@bridge-portal/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
+// Cloudflare Workers rejects Web Crypto PBKDF2 iteration counts above 100,000.
+const PBKDF2_ITERATIONS = 100_000;
+
 function hexEncode(bytes: Uint8Array): string {
 	return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -36,7 +39,12 @@ async function hashPassword(password: string): Promise<string> {
 		["deriveBits"]
 	);
 	const bits = await crypto.subtle.deriveBits(
-		{ name: "PBKDF2", salt, iterations: 210_000, hash: "SHA-256" },
+		{
+			name: "PBKDF2",
+			salt,
+			iterations: PBKDF2_ITERATIONS,
+			hash: "SHA-256",
+		},
 		material,
 		256
 	);
@@ -60,7 +68,7 @@ async function verifyPassword(data: {
 		{
 			name: "PBKDF2",
 			salt: salt.buffer as ArrayBuffer,
-			iterations: 210_000,
+			iterations: PBKDF2_ITERATIONS,
 			hash: "SHA-256",
 		},
 		material,
