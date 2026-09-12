@@ -17,22 +17,23 @@ const admin = {
 	password: "correct-horse-battery-staple",
 };
 
-test("Rule学習から実戦Boardへの往復まで完走する", async ({ page, request }) => {
-	const bootstrap = await request.post(`${apiUrl}/api/bootstrap`, {
-		data: admin,
-		headers: {
-			Authorization:
-				"Bearer e2e-bootstrap-token-at-least-thirty-two-characters",
-			Origin: "http://127.0.0.1:3001",
-		},
-	});
-	expect(bootstrap.status()).toBe(201);
-
+test("新規登録からRule学習と実戦Boardの往復まで完走する", async ({
+	page,
+	request,
+}) => {
 	await page.goto("/");
+	await page.getByRole("button", { name: "新規登録" }).click();
+	await page.getByLabel("表示名").fill(admin.name);
 	await page.getByLabel("メールアドレス").fill(admin.email);
-	await page.getByLabel("パスワード").fill(admin.password);
-	await page.getByRole("button", { name: "ログイン" }).click();
+	await page.getByLabel("パスワード", { exact: true }).fill(admin.password);
+	await page.getByLabel("パスワード（確認）").fill(admin.password);
+	await page.getByRole("button", { name: "アカウントを作成" }).click();
 	await expect(page.getByRole("link", { name: "My Systems" })).toBeVisible();
+	const registrationStatus = await request.get(
+		`${apiUrl}/api/registration-status`,
+		{ headers: { Origin: "http://127.0.0.1:3001" } }
+	);
+	expect(await registrationStatus.json()).toEqual({ available: false });
 
 	await page.getByRole("link", { name: "My Systems" }).click();
 	await page.getByPlaceholder("例: Standard 15–17 NT").fill("Study System");
@@ -106,4 +107,12 @@ test("Rule学習から実戦Boardへの往復まで完走する", async ({ page,
 	await expect(
 		page.getByRole("link", { name: relatedBoardPattern })
 	).toBeVisible();
+
+	const closedStatus = page.waitForResponse((response) =>
+		response.url().includes("/api/registration-status")
+	);
+	await page.getByRole("button", { name: "ログアウト" }).click();
+	await closedStatus;
+	await expect(page.getByRole("button", { name: "ログイン" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "新規登録" })).toHaveCount(0);
 });

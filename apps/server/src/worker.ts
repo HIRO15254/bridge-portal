@@ -69,6 +69,14 @@ function authFor(env: Env, allowSignUp = false) {
 	});
 }
 
+async function hasRegisteredUser(env: Env): Promise<boolean> {
+	const db = createDb(env.DB);
+	const [{ count = 0 } = {}] = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(user);
+	return Number(count) > 0;
+}
+
 async function sha256(value: ArrayBuffer | string): Promise<string> {
 	const bytes =
 		typeof value === "string" ? new TextEncoder().encode(value) : value;
@@ -88,6 +96,23 @@ app.use("/*", (context, next) =>
 		credentials: true,
 	})(context, next)
 );
+
+app.get("/api/registration-status", async (context) =>
+	context.json({ available: !(await hasRegisteredUser(context.env)) })
+);
+
+app.post("/api/auth/sign-up/email", async (context) => {
+	if (await hasRegisteredUser(context.env)) {
+		return context.json(
+			{
+				error: "REGISTRATION_CLOSED",
+				message: "このポータルの管理者アカウントは登録済みです。",
+			},
+			409
+		);
+	}
+	return authFor(context.env, true).handler(context.req.raw);
+});
 
 app.on(["GET", "POST"], "/api/auth/*", (context) =>
 	authFor(context.env).handler(context.req.raw)
@@ -111,10 +136,7 @@ app.post("/api/bootstrap", async (context) => {
 		return context.json({ error: "NOT_FOUND" }, 404);
 	}
 	const db = createDb(context.env.DB);
-	const [{ count = 0 } = {}] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(user);
-	if (Number(count) > 0) {
+	if (await hasRegisteredUser(context.env)) {
 		return context.json({ error: "ALREADY_BOOTSTRAPPED" }, 409);
 	}
 	const body = await context.req.json<{

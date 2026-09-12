@@ -27,7 +27,9 @@ GitHub Actions secretとして`CLOUDFLARE_API_TOKEN`と`BETTER_AUTH_SECRET`を�
 
 ## 初回管理者登録
 
-公開登録とOAuthは無効です。本番deployとmigrationが成功した後、一時的なtokenを本番Workerへ設定します。
+本番deployとmigrationが成功しD1にユーザーが存在しない場合、ログイン画面の「新規登録」から最初の個人アカウントを作成できます。登録後は画面とAPIの新規登録口が自動的に閉じ、D1の一意制約でも追加ユーザーを拒否します。OAuthは無効です。
+
+代わりにCLIで初回登録する場合は、一時的なtokenを本番Workerへ設定します。
 
 ```sh
 bunx wrangler secret put BOOTSTRAP_TOKEN --name bridge-portal-api

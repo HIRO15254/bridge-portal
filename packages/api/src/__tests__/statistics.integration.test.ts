@@ -26,6 +26,7 @@ async function applyMigrations(database: D1Database): Promise<void> {
 		"0000_slimy_night_nurse.sql",
 		"0001_young_stepford_cuckoos.sql",
 		"0002_immutable_system_versions.sql",
+		"0003_dashing_lady_bullseye.sql",
 	]) {
 		const source = readFileSync(
 			new URL(`../../../db/src/migrations/${filename}`, import.meta.url),

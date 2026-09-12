@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath, URL as NodeURL } from "node:url";
 import { appRouter } from "@bridge-portal/api/routers/index";
-import { createDb, type D1Database } from "@bridge-portal/db";
+import { createDb, type D1Database, user } from "@bridge-portal/db";
 import { RULE_ENGINE_VERSION } from "@bridge-portal/domain";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,6 +21,7 @@ const bindingsConfig = {
 	CORS_ORIGIN: "http://web.example.test",
 };
 const cookieBoundaryPattern = /,(?=[^;,]+=)/;
+const failedUserInsertPattern = /Failed query: insert into "user"/;
 
 let miniflare: Miniflare;
 
@@ -29,6 +30,7 @@ async function applyMigrations(database: D1Database): Promise<void> {
 		"0000_slimy_night_nurse.sql",
 		"0001_young_stepford_cuckoos.sql",
 		"0002_immutable_system_versions.sql",
+		"0003_dashing_lady_bullseye.sql",
 	]) {
 		const source = readFileSync(
 			fileURLToPath(
@@ -80,6 +82,13 @@ describe("stored MVP workflow", () => {
 			DB: (await miniflare.getD1Database("DB")) as D1Database,
 			RAW_IMPORTS: await miniflare.getR2Bucket("RAW_IMPORTS"),
 		} as Env;
+		const openRegistration = await app.request(
+			"/api/registration-status",
+			{ headers: { Origin: bindingsConfig.CORS_ORIGIN } },
+			bindings
+		);
+		expect(openRegistration.status).toBe(200);
+		await expect(openRegistration.json()).resolves.toEqual({ available: true });
 		const bootstrap = await app.request(
 			"/api/bootstrap",
 			{
@@ -94,6 +103,34 @@ describe("stored MVP workflow", () => {
 			bindings
 		);
 		expect(bootstrap.status).toBe(201);
+		const closedRegistration = await app.request(
+			"/api/registration-status",
+			{ headers: { Origin: bindingsConfig.CORS_ORIGIN } },
+			bindings
+		);
+		await expect(closedRegistration.json()).resolves.toEqual({
+			available: false,
+		});
+		const secondRegistration = await app.request(
+			"/api/auth/sign-up/email",
+			{
+				body: JSON.stringify({
+					email: "second@example.test",
+					name: "Second learner",
+					password: "another-correct-horse-battery-staple",
+				}),
+				headers: {
+					"Content-Type": "application/json",
+					Origin: bindingsConfig.CORS_ORIGIN,
+				},
+				method: "POST",
+			},
+			bindings
+		);
+		expect(secondRegistration.status).toBe(409);
+		await expect(secondRegistration.json()).resolves.toMatchObject({
+			error: "REGISTRATION_CLOSED",
+		});
 
 		const signIn = await app.request(
 			"/api/auth/sign-in/email",
@@ -115,6 +152,17 @@ describe("stored MVP workflow", () => {
 		if (!learner) {
 			throw new Error("Bootstrap did not create the learner");
 		}
+		const singletonIndex = await bindings.DB.prepare(
+			"SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'user_singleton_uq'"
+		).first<{ name: string }>();
+		expect(singletonIndex?.name).toBe("user_singleton_uq");
+		await expect(
+			db.insert(user).values({
+				email: "database-second@example.test",
+				id: "database-second-user",
+				name: "Database second user",
+			})
+		).rejects.toThrow(failedUserInsertPattern);
 		const caller = appRouter.createCaller({
 			db,
 			session: {

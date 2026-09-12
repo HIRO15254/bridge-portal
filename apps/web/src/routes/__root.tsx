@@ -5,9 +5,9 @@ import {
 	Link,
 	Outlet,
 } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/utils/auth";
+import { authClient, registrationIsAvailable } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
 import "../index.css";
@@ -33,19 +33,63 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function Login() {
 	const [error, setError] = useState("");
+	const [mode, setMode] = useState<"login" | "register">("login");
 	const [pending, setPending] = useState(false);
+	const [registrationAvailable, setRegistrationAvailable] = useState(false);
+	let submitLabel = "ログイン";
+	if (pending) {
+		submitLabel = "確認中…";
+	} else if (mode === "register") {
+		submitLabel = "アカウントを作成";
+	}
+
+	useEffect(() => {
+		let active = true;
+		registrationIsAvailable()
+			.then((available) => {
+				if (active) {
+					setRegistrationAvailable(available);
+				}
+			})
+			.catch(() => {
+				if (active) {
+					setRegistrationAvailable(false);
+				}
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setPending(true);
 		setError("");
 		const data = new FormData(event.currentTarget);
 		try {
-			const result = await authClient.signIn.email({
-				email: String(data.get("email")),
-				password: String(data.get("password")),
-			});
+			const email = String(data.get("email"));
+			const password = String(data.get("password"));
+			if (
+				mode === "register" &&
+				password !== String(data.get("passwordConfirmation"))
+			) {
+				setError("確認用パスワードが一致しません。");
+				return;
+			}
+			const result =
+				mode === "register"
+					? await authClient.signUp.email({
+							email,
+							name: String(data.get("name")),
+							password,
+						})
+					: await authClient.signIn.email({ email, password });
 			if (result.error) {
-				setError("メールアドレスまたはパスワードを確認してください。");
+				setError(
+					mode === "register"
+						? "登録できませんでした。入力内容を確認するか、ログインしてください。"
+						: "メールアドレスまたはパスワードを確認してください。"
+				);
 			} else {
 				window.location.reload();
 			}
@@ -73,7 +117,17 @@ function Login() {
 			<form className="login-card" onSubmit={submit}>
 				<div className="brand-mark">♣</div>
 				<h2>Bridge Portal</h2>
-				<p>個人アカウントにログイン</p>
+				<p>
+					{mode === "register"
+						? "最初の個人アカウントを作成"
+						: "個人アカウントにログイン"}
+				</p>
+				{mode === "register" && (
+					<label>
+						表示名
+						<input autoComplete="name" name="name" required type="text" />
+					</label>
+				)}
 				<label>
 					メールアドレス
 					<input autoComplete="email" name="email" required type="email" />
@@ -81,16 +135,43 @@ function Login() {
 				<label>
 					パスワード
 					<input
-						autoComplete="current-password"
+						autoComplete={
+							mode === "register" ? "new-password" : "current-password"
+						}
+						minLength={mode === "register" ? 12 : undefined}
 						name="password"
 						required
 						type="password"
 					/>
 				</label>
+				{mode === "register" && (
+					<label>
+						パスワード（確認）
+						<input
+							autoComplete="new-password"
+							minLength={12}
+							name="passwordConfirmation"
+							required
+							type="password"
+						/>
+					</label>
+				)}
 				{error && <p className="error">{error}</p>}
 				<Button disabled={pending} type="submit">
-					{pending ? "確認中…" : "ログイン"}
+					{submitLabel}
 				</Button>
+				{registrationAvailable && (
+					<Button
+						onClick={() => {
+							setError("");
+							setMode(mode === "login" ? "register" : "login");
+						}}
+						type="button"
+						variant="secondary"
+					>
+						{mode === "login" ? "新規登録" : "ログインへ戻る"}
+					</Button>
+				)}
 			</form>
 		</main>
 	);

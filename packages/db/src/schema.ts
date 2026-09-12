@@ -19,17 +19,22 @@ const timestamps = {
 		.notNull(),
 };
 
-export const user = sqliteTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: integer("email_verified", { mode: "boolean" })
-		.default(false)
-		.notNull(),
-	image: text("image"),
-	funbridgeId: text("funbridge_id").unique(),
-	...timestamps,
-});
+export const user = sqliteTable(
+	"user",
+	{
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		email: text("email").notNull().unique(),
+		emailVerified: integer("email_verified", { mode: "boolean" })
+			.default(false)
+			.notNull(),
+		image: text("image"),
+		funbridgeId: text("funbridge_id").unique(),
+		singletonKey: integer("singleton_key").default(1).notNull(),
+		...timestamps,
+	},
+	(table) => [uniqueIndex("user_singleton_uq").on(table.singletonKey)]
+);
 export const session = sqliteTable(
 	"session",
 	{

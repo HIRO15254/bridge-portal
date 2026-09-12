@@ -27,7 +27,9 @@ This repository contains versioned D1 migrations. The production workflow applie
 
 ## One-time administrator bootstrap
 
-Public sign-up and OAuth are disabled. After the production deploy and migrations succeed, put a temporary token on the production Worker:
+After the production deploy and migrations succeed, an environment with no user shows a **New registration** action on the login screen. It accepts exactly the first personal account, then closes the UI and API registration path automatically. A D1 unique constraint also rejects a second user. OAuth remains disabled.
+
+To create the first account from the CLI instead, put a temporary token on the production Worker:
 
 ```sh
 bunx wrangler secret put BOOTSTRAP_TOKEN --name bridge-portal-api
