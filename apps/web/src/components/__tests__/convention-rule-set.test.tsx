@@ -24,6 +24,9 @@ describe("convention rule view", () => {
 			screen.getByRole("heading", { name: "プログラム的なルール" })
 		).toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "[注1]" })).toBeInTheDocument();
+		fireEvent.click(
+			screen.getByText("1NTの条件を試す", { selector: "summary" })
+		);
 		const sample = screen.getByRole("region", {
 			name: "1NT条件のサンプル判定",
 		});

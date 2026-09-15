@@ -9,28 +9,39 @@ import {
 	type OfficialItemId,
 	type SystemSettings,
 } from "@bridge-portal/domain";
+import {
+	IconAlignLeft,
+	IconArrowUpRight,
+	IconCode,
+	IconInfoCircle,
+} from "@tabler/icons-react";
 import { useId, useState } from "react";
+import { type ConventionTopic, rulesForTopic } from "@/lib/convention-topics";
 
 export function ConventionRuleSet({
 	officialItemId,
 	settings,
 	selectedVariants,
 	adopted = true,
+	topic,
 }: {
 	officialItemId: OfficialItemId;
 	settings: SystemSettings;
 	selectedVariants?: readonly string[];
 	adopted?: boolean;
+	topic?: ConventionTopic;
 }) {
 	const anchor = useId();
 	const [variant, setVariant] = useState("*");
 	const source = conventionSources[officialItemId];
 	const allRows = getConventionRules(officialItemId, settings);
-	const rows = allRows.filter((row) =>
-		variant === "*"
-			? !selectedVariants || selectedVariants.includes(row.variant)
-			: row.variant === variant
-	);
+	const rows = topic
+		? rulesForTopic(allRows, topic)
+		: allRows.filter((row) =>
+				variant === "*"
+					? !selectedVariants || selectedVariants.includes(row.variant)
+					: row.variant === variant
+			);
 	const variants = getRule(officialItemId)?.variants ?? [];
 	const parameters = new Map(
 		rows.flatMap((row) =>
@@ -42,7 +53,7 @@ export function ConventionRuleSet({
 		)
 	);
 	const hasBalanced =
-		officialItemId === "A-OB-01" ||
+		(!topic && officialItemId === "A-OB-01") ||
 		rows.some((row) =>
 			row.when.all.some((condition) => condition.kind === "term")
 		);
@@ -51,50 +62,55 @@ export function ConventionRuleSet({
 			aria-label="条件とアクションのルールセット"
 			className="convention-rule-set"
 		>
-			<dl className="convention-source-map">
-				<dt>JCBLの対応欄</dt>
-				<dd>
-					{source.jcbl}{" "}
-					<a href={source.jcblUrl} rel="noreferrer" target="_blank">
-						記入解説 ↗
-					</a>
-				</dd>
-				<dt>Funbridge</dt>
-				<dd>
-					{source.funbridge}{" "}
-					<a href={source.funbridgeUrl} rel="noreferrer" target="_blank">
-						出典 ↗
-					</a>
-				</dd>
-			</dl>
-			<p className="convention-caption">
-				JCBL欄はカードの記載先との対応です。アプリの設定例とFunbridgeの内部判定は同一とは限りません。
-			</p>
-			<label className="convention-variant-picker">
-				表示する方式
-				<select
-					onChange={(event) => setVariant(event.target.value)}
-					value={variant}
-				>
-					<option value="*">
-						{selectedVariants ? "採用中の方式" : "すべての方式"}
-					</option>
-					{variants.map((name) => (
-						<option key={name} value={name}>
-							{name}
-							{selectedVariants?.includes(name) ? "（採用）" : ""}
+			<details className="convention-sources">
+				<summary>JCBL・Funbridgeの対応と出典</summary>
+				<dl className="convention-source-map">
+					<dt>JCBLの対応欄</dt>
+					<dd>
+						{source.jcbl}{" "}
+						<a href={source.jcblUrl} rel="noreferrer" target="_blank">
+							記入解説 ↗
+						</a>
+					</dd>
+					<dt>Funbridge</dt>
+					<dd>
+						{source.funbridge}{" "}
+						<a href={source.funbridgeUrl} rel="noreferrer" target="_blank">
+							出典 ↗
+						</a>
+					</dd>
+				</dl>
+				<p className="convention-caption">
+					JCBL欄はカードの記載先との対応です。アプリの設定例とFunbridgeの内部判定は同一とは限りません。
+				</p>
+			</details>
+			{!topic && (
+				<label className="convention-variant-picker">
+					表示する方式
+					<select
+						onChange={(event) => setVariant(event.target.value)}
+						value={variant}
+					>
+						<option value="*">
+							{selectedVariants ? "採用中の方式" : "すべての方式"}
 						</option>
-					))}
-				</select>
-			</label>
+						{variants.map((name) => (
+							<option key={name} value={name}>
+								{name}
+								{selectedVariants?.includes(name) ? "（採用）" : ""}
+							</option>
+						))}
+					</select>
+				</label>
+			)}
 			{!adopted && (
 				<p className="notice">
 					この項目は選択したSystemでは未採用です。以下は比較用の説明です。
 				</p>
 			)}
-			{variant !== "*" &&
+			{(topic || variant !== "*") &&
 				selectedVariants &&
-				!selectedVariants.includes(variant) && (
+				!selectedVariants.includes(topic?.variant ?? variant) && (
 					<p className="notice">
 						この方式は未採用です。採用する場合はMy
 						SystemのDraftで選択して保存してください。
@@ -104,7 +120,10 @@ export function ConventionRuleSet({
 				<p>採用している方式がありません。方式を選ぶと条件を確認できます。</p>
 			) : (
 				<>
-					<h3>自然言語での説明</h3>
+					<h3 className="convention-section-heading">
+						<IconAlignLeft aria-hidden="true" size={17} stroke={1.7} />
+						自然言語での説明
+					</h3>
 					<ol className="convention-explanations">
 						{rows.map((row) => (
 							<li key={row.id}>
@@ -113,54 +132,52 @@ export function ConventionRuleSet({
 							</li>
 						))}
 					</ol>
-					<h3>プログラム的なルール</h3>
+					<h3 className="convention-section-heading">
+						<IconCode aria-hidden="true" size={17} stroke={1.7} />
+						プログラム的なルール
+					</h3>
 					<p className="convention-caption">
 						各行の条件はすべて満たす必要があります。「候補」は他の採用規則との比較が必要です。情報不足は判定保留として扱います。
 					</p>
-					<div className="convention-table-wrap">
-						<table className="convention-table">
-							<thead>
-								<tr>
-									<th scope="col">適用条件（AND）</th>
-									<th scope="col">アクションと示す意味</th>
-								</tr>
-							</thead>
-							<tbody>
-								{rows.map((row, index) => (
-									<tr key={row.id}>
-										<td>
-											<strong>
-												ルール {index + 1} · {row.title}
-											</strong>
-											<ul>
-												{row.when.all.map((condition) => (
-													<li key={JSON.stringify(condition)}>
-														<Condition anchor={anchor} condition={condition} />
-													</li>
-												))}
-											</ul>
-										</td>
-										<td>
-											<span className="pill">
-												{
-													{
-														CANDIDATE: "候補",
-														REQUIRED: "指定応答・手順",
-														VALIDATION: "設定検査",
-													}[row.selection]
-												}
+					<div className="convention-cards">
+						{rows.map((row, index) => (
+							<article className="convention-logic-card" key={row.id}>
+								<header>
+									<strong>
+										ルール {index + 1} · {row.title}
+									</strong>
+									<span className="pill">
+										{
+											{
+												CANDIDATE: "候補",
+												REQUIRED: "指定応答・手順",
+												VALIDATION: "設定検査",
+											}[row.selection]
+										}
+									</span>
+								</header>
+								<ul className="convention-condition-list">
+									{row.when.all.map((condition, conditionIndex) => (
+										<li key={JSON.stringify(condition)}>
+											<span className="logic-keyword">
+												{conditionIndex === 0 ? "IF" : "AND"}
 											</span>
-											<p>
-												<code>
-													{row.action.type} {row.action.value}
-												</code>
-											</p>
-											<p>{row.meaning}</p>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+											<span>
+												<Condition anchor={anchor} condition={condition} />
+											</span>
+										</li>
+									))}
+								</ul>
+								<div className="convention-action">
+									<span className="logic-keyword">THEN</span>
+									<code>
+										{row.action.type} {row.action.value}
+									</code>
+									<IconArrowUpRight aria-hidden="true" size={16} />
+								</div>
+								<p className="convention-meaning">{row.meaning}</p>
+							</article>
+						))}
 					</div>
 				</>
 			)}
@@ -170,6 +187,7 @@ export function ConventionRuleSet({
 					className="convention-definition"
 					id={`${anchor}-balanced`}
 				>
+					<IconInfoCircle aria-hidden="true" size={15} />{" "}
 					<strong>注1 バランスハンド：</strong>
 					{describeConventionTerm("balanced", settings)}。<br />
 					<small>参照元：{conventionTerms.balanced.settingLabel}</small>
@@ -187,15 +205,19 @@ export function ConventionRuleSet({
 					</ul>
 				</details>
 			)}
-			{officialItemId === "A-OB-01" && (
-				<NaturalNtSample
-					adopted={
-						adopted &&
-						(!selectedVariants || selectedVariants.includes("Natural 1NT"))
-					}
-					settings={settings}
-				/>
-			)}
+			{officialItemId === "A-OB-01" &&
+				(!topic || topic.variant === "Natural 1NT") && (
+					<details className="convention-sample-details">
+						<summary>1NTの条件を試す</summary>
+						<NaturalNtSample
+							adopted={
+								adopted &&
+								(!selectedVariants || selectedVariants.includes("Natural 1NT"))
+							}
+							settings={settings}
+						/>
+					</details>
+				)}
 			<details>
 				<summary>ルールデータを表示</summary>
 				<pre className="convention-json">{JSON.stringify(rows, null, 2)}</pre>

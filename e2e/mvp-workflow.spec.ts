@@ -21,7 +21,8 @@ const admin = {
 test("新規登録からRule学習と実戦Boardの往復まで完走する", async ({
 	page,
 	request,
-}) => {
+}, testInfo) => {
+	test.setTimeout(120_000);
 	await page.goto("/");
 	await page.getByRole("button", { name: "新規登録" }).click();
 	await page.getByLabel("表示名").fill(admin.name);
@@ -44,6 +45,23 @@ test("新規登録からRule学習と実戦Boardの往復まで完走する", as
 	await expect(
 		page.getByText("変更不能な新しいSystem Versionを公開しました。")
 	).toBeVisible();
+
+	await page.getByRole("button", { name: "Versions", exact: true }).click();
+	await expect(
+		page.getByRole("heading", { name: "Version 1", exact: true })
+	).toBeVisible();
+	await page.getByRole("button", { name: "全体設定", exact: true }).click();
+	await page.getByLabel("5332", { exact: true }).uncheck();
+	await page.getByRole("button", { name: "採用する方式", exact: true }).click();
+	await expect(page.getByLabel("5332", { exact: true })).toBeHidden();
+	await page.getByRole("button", { name: "Draftを保存", exact: true }).click();
+	await expect(page.getByText("Draftを保存しました。")).toBeVisible();
+	await page.reload();
+	await expect(page.getByLabel("5332", { exact: true })).not.toBeChecked();
+	await page.screenshot({
+		path: testInfo.outputPath("systems-light.png"),
+		fullPage: false,
+	});
 
 	await page.getByRole("link", { name: "Tournaments" }).click();
 	await page
@@ -103,7 +121,7 @@ test("新規登録からRule学習と実戦Boardの往復まで完走する", as
 	await page.goto(boardUrl);
 	await page.getByRole("link", { name: openingRulePattern }).click();
 	await expect(
-		page.getByRole("heading", { name: "ナチュラル・オープン" })
+		page.getByRole("heading", { name: "ナチュラル1NTオープン" })
 	).toBeVisible();
 	await expect(
 		page.getByRole("heading", { name: "自然言語での説明" })
@@ -111,6 +129,64 @@ test("新規登録からRule学習と実戦Boardの往復まで完走する", as
 	await expect(
 		page.getByRole("heading", { name: "プログラム的なルール" })
 	).toBeVisible();
+	await page
+		.getByLabel("説明・注釈に使うSystem")
+		.selectOption({ label: "Study System · Draft" });
+	await expect(page.locator(".convention-definition")).not.toContainText(
+		"5332"
+	);
+	await page
+		.getByLabel("説明・注釈に使うSystem")
+		.selectOption({ label: "Study System · Version 1" });
+	await expect(page.locator(".convention-definition")).toContainText("5332");
+	await page.screenshot({
+		path: testInfo.outputPath("rules-light.png"),
+		fullPage: false,
+	});
+	await page.getByLabel("配色", { exact: true }).selectOption("dark");
+	await page.reload();
+	await expect(page.getByLabel("配色", { exact: true })).toHaveValue("dark");
+	await expect(page.locator(".rule-detail")).toHaveCSS(
+		"background-color",
+		"rgb(21, 22, 25)"
+	);
+	await page.screenshot({
+		path: testInfo.outputPath("rules-dark.png"),
+		fullPage: false,
+	});
+	await page.getByLabel("配色", { exact: true }).selectOption("light");
+	await page
+		.getByRole("button", { name: "ナチュラル1mオープン", exact: true })
+		.click();
+	await expect(page.locator(".convention-logic-card")).toHaveCount(2);
+	await expect(page.getByText("1NTの条件を試す", { exact: true })).toHaveCount(
+		0
+	);
+	await page.reload();
+	await expect(
+		page.getByRole("heading", { name: "ナチュラル1mオープン", exact: true })
+	).toBeVisible();
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page
+		.getByRole("button", { name: "ナチュラル1Mオープン", exact: true })
+		.click();
+	await expect(
+		page.getByRole("heading", { name: "ナチュラル1Mオープン", exact: true })
+	).toBeVisible();
+	await expect(page.locator(".convention-logic-card")).toHaveCount(1);
+	expect(
+		await page.evaluate(
+			() => document.documentElement.scrollWidth <= window.innerWidth
+		)
+	).toBe(true);
+	await page.screenshot({
+		path: testInfo.outputPath("rules-mobile.png"),
+		fullPage: false,
+	});
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await page
+		.getByRole("button", { name: "ナチュラル1NTオープン", exact: true })
+		.click();
 	await page.getByText("背景・継続・方式の補足", { exact: true }).click();
 	await expect(
 		page.getByRole("heading", { name: "① いつ使うか" })
@@ -120,19 +196,19 @@ test("新規登録からRule学習と実戦Boardの往復まで完走する", as
 	).toBeVisible();
 	await expect(
 		page.getByText(
-			"Weak TwoのHCP＋ビッドスーツ枚数は10以上。10未満のWeak TwoはリストAでは使用不可。"
+			"Weak Twoはビッドスーツ5枚以上で、HCP＋そのスーツの枚数が10以上必要です。具体的なHCPレンジ・長さ・NTの形はMy Systemで定めます。"
 		)
 	).toBeVisible();
 	await expect(
 		page.getByRole("link", { name: relatedBoardPattern })
 	).toBeVisible();
-	await page
-		.locator(".rule-row")
-		.filter({ hasText: "Stayman" })
-		.first()
-		.click();
+	await page.getByLabel("ルールを検索").fill("Stayman");
+	await page.locator(".rule-row").first().click();
 	await expect(page).toHaveURL(staymanUrlPattern);
-	await expect(page.getByRole("heading", { name: "Stayman" })).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "4枚メジャーを尋ねる", exact: true })
+	).toBeVisible();
+	await page.getByText("背景・継続・方式の補足", { exact: true }).click();
 	await expect(
 		page
 			.getByText(

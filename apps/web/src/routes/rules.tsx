@@ -1,27 +1,36 @@
+import { defaultSystemSettings } from "@bridge-portal/domain";
 import {
-	defaultSystemSettings,
-	type OfficialItemId,
-} from "@bridge-portal/domain";
+	IconBook2,
+	IconChevronDown,
+	IconSearch,
+	IconStack2,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ConventionRuleSet } from "@/components/convention-rule-set";
+import {
+	getConventionTopics,
+	resolveConventionTopic,
+} from "@/lib/convention-topics";
 import { ruleGuides } from "@/lib/rule-guide";
-import { trpc } from "@/utils/trpc";
+import { trpc, type trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/rules")({
 	component: RulesPage,
-	validateSearch: (search: Record<string, unknown>) => ({
+	validateSearch: (
+		search: Record<string, unknown>
+	): { rule?: string; topic?: string } => ({
 		rule: typeof search.rule === "string" ? search.rule : undefined,
+		topic: typeof search.topic === "string" ? search.topic : undefined,
 	}),
 });
 const labels: Record<string, string> = {
-	OPENING_BIDS: "オープニングBid",
-	RESPONSES_REBIDS: "ResponseとRebid",
-	COMPETITIVE_DEFENSIVE: "競り合い・ディフェンスのCall",
-	CARDING: "リードとSignal",
+	OPENING_BIDS: "オープニング",
+	RESPONSES_REBIDS: "レスポンス・リビッド",
+	COMPETITIVE_DEFENSIVE: "競り合い・ディフェンス",
+	CARDING: "カーディング",
 };
-
 const alertLabels = {
 	REQUIRED: "Alert対象",
 	NOT_REQUIRED: "リストA固有のAlert不要",
@@ -33,177 +42,157 @@ function RulesPage() {
 	const manifest = useQuery(trpc.rules.manifest.queryOptions());
 	const systems = useQuery(trpc.systems.list.queryOptions());
 	const [systemSelection, setSystemSelection] = useState("default");
-	const systemOptions = (systems.data ?? []).flatMap((system) => [
-		...(system.draft
-			? [
-					{
-						key: `draft:${system.id}`,
-						label: `${system.name} · Draft（保存済み）`,
-						snapshot: system.draft,
-					},
-				]
-			: []),
-		...system.versions.map((version) => ({
-			key: `version:${version.id}`,
-			label: `${system.name} · Version ${version.versionNumber}`,
-			snapshot: version,
-		})),
-	]);
+	const [query, setQuery] = useState("");
+	const search = Route.useSearch();
+	const navigate = useNavigate();
+	const selected = search.rule ?? "A-OB-01";
+	const detail = rules.data?.find((item) => item.officialItemId === selected);
+	const topic = resolveConventionTopic(
+		detail?.officialItemId ?? "A-OB-01",
+		search.topic
+	);
+	const systemOptions = getSystemOptions(systems.data ?? []);
 	const snapshot = systemOptions.find(
 		(option) => option.key === systemSelection
 	)?.snapshot;
-	const search = Route.useSearch();
-	const navigate = useNavigate();
-	const [query, setQuery] = useState("");
-	const selected = search.rule ?? "A-RR-02";
 	const related = useQuery({
-		...trpc.rules.relatedBoards.queryOptions({
-			officialItemId: selected ?? "_",
-		}),
-		enabled: Boolean(selected),
+		...trpc.rules.relatedBoards.queryOptions({ officialItemId: selected }),
+		enabled: Boolean(detail),
 	});
-	const items = useMemo(
-		() =>
-			(rules.data ?? []).filter((rule) =>
-				`${rule.title}${rule.summary}${rule.applicability}${rule.variants.join(" ")}${ruleGuides[rule.officialItemId].when}${ruleGuides[rule.officialItemId].meaning}`
+	const items = (rules.data ?? [])
+		.map((item) => ({
+			...item,
+			topics: getConventionTopics(item.officialItemId).filter((entry) =>
+				`${entry.title} ${entry.variant} ${item.title} ${item.officialItemId}`
 					.toLowerCase()
 					.includes(query.toLowerCase())
 			),
-		[rules.data, query]
-	);
-	const detail = rules.data?.find((item) => item.officialItemId === selected);
+		}))
+		.filter((item) => item.topics.length > 0);
 	const guide = detail ? ruleGuides[detail.officialItemId] : undefined;
 	return (
-		<main className="page">
-			<div className="page-heading">
-				<div>
-					<p className="eyebrow">RULE CATALOG</p>
-					<h1>JCBL リストA</h1>
-					<p>22項目から方式を選び、説明・条件・アクションを確認できます。</p>
-				</div>
-				<input
-					aria-label="ルールを検索"
-					className="search"
-					onChange={(event) => setQuery(event.target.value)}
-					placeholder="ルールを検索…"
-					value={query}
-				/>
+		<main className="rules-page">
+			<div className="rules-page-heading">
+				<h1>
+					Rules <span>JCBL リストA · 22分類</span>
+				</h1>
+				<label className="convention-system-picker">
+					<IconStack2 aria-hidden="true" size={16} />
+					<span className="sr-only">説明・注釈に使うSystem</span>
+					<select
+						onChange={(event) => setSystemSelection(event.target.value)}
+						value={systemSelection}
+					>
+						<option value="default">初期設定の例（未保存）</option>
+						{systemOptions.map((option) => (
+							<option key={option.key} value={option.key}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</label>
 			</div>
-			<label className="convention-system-picker">
-				説明・注釈に使うSystem
-				<select
-					onChange={(event) => setSystemSelection(event.target.value)}
-					value={systemSelection}
-				>
-					<option value="default">初期設定の例（未保存）</option>
-					{systemOptions.map((option) => (
-						<option key={option.key} value={option.key}>
-							{option.label}
-						</option>
-					))}
-				</select>
-				<Link to="/systems">My Systemで方式・共通定義を編集 →</Link>
-			</label>
-			<p className="rule-catalog-note">
-				ここに表示するのはリストAの枠組みです。点数レンジ・応答ステップなど、ペアごとに変わる意味はMy
-				Systemでの合意が必要です。
-				<br />
-				Auction表記：1NT–2♣は1NTの後にパートナーが2♣。XはDouble、XXはRedouble、括弧内は相手のCallです。
-			</p>
+			{rules.isError && (
+				<p className="error" role="alert">
+					ルールを読み込めませんでした。ページを再読み込みしてください。
+				</p>
+			)}
 			<div className="rules-layout">
-				<section className="rule-list">
-					<details className="panel rule-glossary">
-						<summary>用語・Full Disclosure・Alertについて</summary>
-						<p>{manifest.data?.fullDisclosure}</p>
-						{manifest.data && (
-							<ul>
-								{Object.entries(manifest.data.glossary).map(
-									([term, definition]) => (
-										<li key={term}>
-											<strong>{term}:</strong> {definition}
-										</li>
-									)
-								)}
-							</ul>
-						)}
-						<small>{manifest.data?.alertPolicy}</small>
-					</details>
-					{Object.entries(labels).map(([category, label]) => (
-						<div key={category}>
-							<h2 className="rule-category-heading">{label}</h2>
-							{items
-								.filter((item) => item.category === category)
-								.map((item) => (
-									<button
-										aria-pressed={selected === item.officialItemId}
-										className={
-											selected === item.officialItemId
-												? "rule-row selected"
-												: "rule-row"
-										}
-										key={item.officialItemId}
-										onClick={async () => {
-											await navigate({
-												to: "/rules",
-												search: { rule: item.officialItemId },
-											});
-											if (window.matchMedia("(max-width: 950px)").matches) {
-												document
-													.getElementById("rule-detail")
-													?.scrollIntoView();
-											}
-										}}
-										type="button"
-									>
-										<span>{item.officialItemId}</span>
-										<div>
-											<strong>{item.title}</strong>
-											<p>
-												<b>使う局面</b> {ruleGuides[item.officialItemId].when}
-											</p>
-											<p>
-												<b>示す意味</b>{" "}
-												{ruleGuides[item.officialItemId].meaning}
-											</p>
-										</div>
-										<b>→</b>
-									</button>
-								))}
-						</div>
-					))}
+				<section aria-label="ルール一覧" className="rule-list">
+					<label className="catalog-search">
+						<IconSearch aria-hidden="true" size={16} />
+						<input
+							aria-label="ルールを検索"
+							onChange={(event) => setQuery(event.target.value)}
+							placeholder="ルールを検索…"
+							value={query}
+						/>
+					</label>
+					{Object.entries(labels).map(([category, label]) => {
+						const group = items.filter((item) => item.category === category);
+						return (
+							group.length > 0 && (
+								<div key={category}>
+									<h2 className="rule-category-heading">{label}</h2>
+									{group.map((item) => (
+										<details
+											className="catalog-group"
+											key={`${item.officialItemId}:${query}`}
+											open={item.officialItemId === selected || Boolean(query)}
+										>
+											<summary>
+												<IconChevronDown aria-hidden="true" size={14} />
+												{item.title}
+												<small>{item.topics.length}</small>
+											</summary>
+											<div className="catalog-topics">
+												{item.topics.map((entry) => (
+													<button
+														aria-pressed={
+															selected === item.officialItemId &&
+															topic?.key === entry.key
+														}
+														className="rule-row"
+														key={entry.key}
+														onClick={async () => {
+															await navigate({
+																to: "/rules",
+																search: {
+																	rule: item.officialItemId,
+																	topic: entry.key,
+																},
+															});
+															if (
+																window.matchMedia("(max-width: 760px)").matches
+															) {
+																document
+																	.getElementById("rule-detail")
+																	?.scrollIntoView({ block: "start" });
+															}
+														}}
+														type="button"
+													>
+														<strong>{entry.title}</strong>
+													</button>
+												))}
+											</div>
+										</details>
+									))}
+								</div>
+							)
+						);
+					})}
+					{rules.isPending && <p className="catalog-empty">読み込み中…</p>}
 					{rules.isSuccess && items.length === 0 && (
-						<p className="rule-no-results">
-							該当するルールがありません。検索語を変えてください。
-						</p>
+						<p className="catalog-empty">該当する項目がありません。</p>
 					)}
 				</section>
-				<aside className="rule-detail" id="rule-detail">
-					{detail && guide ? (
+				<article
+					className="rule-detail"
+					id="rule-detail"
+					key={`${selected}:${topic?.key}`}
+				>
+					{detail && topic && guide ? (
 						<>
-							<p className="eyebrow">{detail.officialItemId}</p>
-							<h2>{detail.title}</h2>
-							<span
-								className={`pill ${detail.alert === "REQUIRED" ? "warn" : ""}`}
-							>
-								{alertLabels[detail.alert]}
-							</span>
-							<p className="rule-detail-summary">{detail.summary}</p>
-							<ConventionRuleSet
-								adopted={
-									!snapshot ||
-									snapshot.adoptedOfficialItemIds.includes(
-										detail.officialItemId
-									)
-								}
-								key={`${selected}:${systemSelection}`}
-								officialItemId={detail.officialItemId as OfficialItemId}
-								selectedVariants={
-									snapshot
-										? (snapshot.selectedVariants[detail.officialItemId] ?? [])
-										: undefined
-								}
-								settings={snapshot?.settings ?? defaultSystemSettings}
+							<div className="rule-detail-meta">
+								<IconBook2 aria-hidden="true" size={15} />
+								<span>{detail.officialItemId}</span>
+								<span>{alertLabels[detail.alert]}</span>
+							</div>
+							<h2>{topic.title}</h2>
+							<p className="rule-breadcrumb">
+								{labels[detail.category]} / {detail.title}
+							</p>
+							<SnapshotConvention
+								key={`${selected}:${topic.key}:${systemSelection}`}
+								officialItemId={detail.officialItemId}
+								snapshot={snapshot}
+								topic={topic}
 							/>
+							<div className="rule-detail-footer">
+								<span>条件・注釈は選択中のSystemを参照</span>
+								<Link to="/systems">My Systemで編集 →</Link>
+							</div>
 							<details className="rule-source-condition">
 								<summary>背景・継続・方式の補足</summary>
 								<div className="rule-guide-grid">
@@ -224,58 +213,124 @@ function RulesPage() {
 										<p>{guide.check}</p>
 									</section>
 								</div>
-								<h3>方式・Variantごとの意味</h3>
-								<ul className="rule-variant-list">
-									{detail.variants.map((variant) => (
-										<li key={variant}>
-											<strong>{variant}</strong>
-											<span>{guide.variantNotes[variant]}</span>
-										</li>
+								<p>{guide.variantNotes[topic.variant]}</p>
+								<h3>
+									{detail.exampleKind === "PLAY" ? "Play例" : "Auction例"}
+									（分類全体）
+								</h3>
+								<p>{detail.example}</p>
+								<h3>My Systemで決める項目</h3>
+								<ul>
+									{detail.configuration.map((item) => (
+										<li key={item}>{item}</li>
 									))}
 								</ul>
-							</details>
-							<h3>{detail.exampleKind === "PLAY" ? "Play例" : "Auction例"}</h3>
-							<p>{detail.example}</p>
-							<h3>My Systemで決める項目</h3>
-							<ul>
-								{detail.configuration.map((item) => (
-									<li key={item}>{item}</li>
-								))}
-							</ul>
-							<details className="rule-source-condition">
-								<summary>収録された適用条件を読む</summary>
 								<p>{detail.applicability}</p>
+								<a href={detail.officialUrl} rel="noreferrer" target="_blank">
+									公式資料（施行日 {detail.effectiveDate}） ↗
+								</a>
 							</details>
-							<h3>関連ハンド</h3>
-							<div className="related-boards">
-								{related.data?.map((board) => (
-									<Link
-										key={board.boardId}
-										params={{ boardId: board.boardId }}
-										to="/boards/$boardId"
-									>
-										<strong>
-											{board.tournamentName} · Board {board.boardNumber}
-										</strong>
-										<span>{board.verdict}</span>
-									</Link>
-								))}
-								{related.data?.length === 0 && (
-									<p>評価済みハンドはまだありません。</p>
-								)}
-							</div>
-							<a href={detail.officialUrl} rel="noreferrer" target="_blank">
-								公式資料（施行日 {detail.effectiveDate}）を確認 ↗
-							</a>
+							<details className="rule-source-condition">
+								<summary>用語・Full Disclosure・Alertについて</summary>
+								<p>{manifest.data?.fullDisclosure}</p>
+								<ul>
+									{Object.entries(manifest.data?.glossary ?? {}).map(
+										([term, definition]) => (
+											<li key={term}>
+												<strong>{term}:</strong> {definition}
+											</li>
+										)
+									)}
+								</ul>
+								<p>{manifest.data?.alertPolicy}</p>
+								<p>
+									Auction表記：XはDouble、XXはRedouble、括弧内は相手のCallです。
+								</p>
+							</details>
+							<RelatedHands boards={related.data ?? []} />
 						</>
 					) : (
 						<div className="empty">
-							<strong>ルールを選択</strong>
-							<p>項目を選ぶと解説と設定条件が表示されます。</p>
+							<strong>{rules.isPending ? "読み込み中" : "ルールを選択"}</strong>
+							<p>左の一覧から項目を選択してください。</p>
 						</div>
 					)}
-				</aside>
+				</article>
 			</div>
 		</main>
+	);
+}
+
+function getSystemOptions(
+	systems: Awaited<ReturnType<typeof trpcClient.systems.list.query>>
+) {
+	return systems.flatMap((system) => [
+		...(system.draft
+			? [
+					{
+						key: `draft:${system.id}`,
+						label: `${system.name} · Draft`,
+						snapshot: system.draft,
+					},
+				]
+			: []),
+		...system.versions.map((version) => ({
+			key: `version:${version.id}`,
+			label: `${system.name} · Version ${version.versionNumber}`,
+			snapshot: version,
+		})),
+	]);
+}
+
+function RelatedHands({
+	boards,
+}: {
+	boards: Awaited<ReturnType<typeof trpcClient.rules.relatedBoards.query>>;
+}) {
+	return (
+		<section className="rule-related">
+			<h3>
+				関連ハンド <small>JCBL分類単位</small>
+			</h3>
+			<div className="related-boards">
+				{boards?.map((board) => (
+					<Link
+						key={board.boardId}
+						params={{ boardId: board.boardId }}
+						to="/boards/$boardId"
+					>
+						<strong>
+							{board.tournamentName} · Board {board.boardNumber}
+						</strong>
+						<span>{board.verdict}</span>
+					</Link>
+				))}
+				{boards?.length === 0 && <p>評価済みハンドはまだありません。</p>}
+			</div>
+		</section>
+	);
+}
+
+function SnapshotConvention({
+	officialItemId,
+	snapshot,
+	topic,
+}: {
+	officialItemId: import("@bridge-portal/domain").OfficialItemId;
+	snapshot?: ReturnType<typeof getSystemOptions>[number]["snapshot"];
+	topic: import("@/lib/convention-topics").ConventionTopic;
+}) {
+	return (
+		<ConventionRuleSet
+			adopted={
+				!snapshot || snapshot.adoptedOfficialItemIds.includes(officialItemId)
+			}
+			officialItemId={officialItemId}
+			selectedVariants={
+				snapshot ? (snapshot.selectedVariants[officialItemId] ?? []) : undefined
+			}
+			settings={snapshot?.settings ?? defaultSystemSettings}
+			topic={topic}
+		/>
 	);
 }

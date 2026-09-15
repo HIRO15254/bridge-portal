@@ -466,7 +466,7 @@ select:focus {
 	padding: 27px;
 	color: var(--ink) !important;
 	scroll-margin-top: 82px;
-	background: white !important;
+	background: var(--paper) !important;
 	border: 1px solid var(--line);
 	border-radius: 12px;
 }

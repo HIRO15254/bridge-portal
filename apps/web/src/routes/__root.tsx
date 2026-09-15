@@ -1,17 +1,30 @@
+import {
+	IconBook2,
+	IconCards,
+	IconChartLine,
+	IconClubs,
+	IconLayoutDashboard,
+	IconLayoutSidebar,
+	IconLogout,
+	IconStack2,
+} from "@tabler/icons-react";
 import type { QueryClient } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Link,
 	Outlet,
+	useRouterState,
 } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
+import { AppearancePicker } from "@/components/appearance-picker";
 import { Button } from "@/components/ui/button";
 import { registrationErrorMessage } from "@/lib/auth-error";
 import { authClient, registrationIsAvailable } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
 import "../index.css";
+import "../styles/workspace.css";
 
 export interface RouterAppContext {
 	queryClient: QueryClient;
@@ -116,7 +129,9 @@ function Login() {
 				</p>
 			</section>
 			<form className="login-card" onSubmit={submit}>
-				<div className="brand-mark">♣</div>
+				<div className="brand-mark">
+					<IconClubs aria-hidden="true" size={24} stroke={1.7} />
+				</div>
 				<h2>Bridge Portal</h2>
 				<p>
 					{mode === "register"
@@ -185,15 +200,19 @@ function Login() {
 }
 
 const nav = [
-	["/", "Overview", "⌂"],
-	["/rules", "Rules", "□"],
-	["/systems", "My Systems", "♢"],
-	["/tournaments", "Tournaments", "♧"],
-	["/statistics", "Statistics", "↗"],
+	["/", "Overview", IconLayoutDashboard],
+	["/rules", "Rules", IconBook2],
+	["/systems", "My Systems", IconStack2],
+	["/tournaments", "Tournaments", IconCards],
+	["/statistics", "Statistics", IconChartLine],
 ] as const;
 
 function RootComponent() {
 	const session = authClient.useSession();
+	const pathname = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const pageName = nav.find(([path]) => path === pathname)?.[1] ?? "Board";
 	if (session.isPending) {
 		return (
 			<main className="center">
@@ -207,24 +226,23 @@ function RootComponent() {
 			<HeadContent />
 			{session.data ? (
 				<div className="app-frame">
-					<aside>
+					<aside className="app-sidebar">
 						<Link className="logo" to="/">
-							<span>♣</span>
-							<strong>
-								Bridge
-								<br />
-								Portal
-							</strong>
+							<span>
+								<IconClubs aria-hidden="true" size={19} stroke={1.7} />
+							</span>
+							<strong>Bridge Portal</strong>
 						</Link>
-						<nav>
-							{nav.map(([to, label, icon]) => (
+						<p className="sidebar-label">Workspace</p>
+						<nav aria-label="メインナビゲーション">
+							{nav.map(([to, label, Icon]) => (
 								<Link
 									activeOptions={{ exact: to === "/" }}
 									activeProps={{ className: "active" }}
 									key={to}
 									to={to}
 								>
-									<span>{icon}</span>
+									<Icon aria-hidden="true" size={18} stroke={1.7} />
 									{label}
 								</Link>
 							))}
@@ -243,13 +261,19 @@ function RootComponent() {
 							type="button"
 							variant="ghost"
 						>
+							<IconLogout aria-hidden="true" size={16} stroke={1.7} />
 							ログアウト
 						</Button>
 					</aside>
 					<div className="workspace">
 						<header>
-							<p>JCBL LIST A · 2026.05.01</p>
-							<span className="status-dot">System ready</span>
+							<div className="workspace-breadcrumb">
+								<IconLayoutSidebar aria-hidden="true" size={17} stroke={1.7} />
+								<span>Workspace</span>
+								<span>/</span>
+								<strong>{pageName}</strong>
+							</div>
+							<AppearancePicker />
 						</header>
 						<Outlet />
 					</div>

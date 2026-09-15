@@ -2,11 +2,13 @@ import {
 	describeConventionTerm,
 	type OfficialItemId,
 } from "@bridge-portal/domain";
+import { IconPlus, IconStack2 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { ConventionRuleSet } from "@/components/convention-rule-set";
 import { Button } from "@/components/ui/button";
+import { getConventionTopics } from "@/lib/convention-topics";
 import { readSystemForm, readSystemVariants } from "@/lib/system-form";
 import { queryClient, trpc, trpcClient } from "@/utils/trpc";
 
@@ -18,6 +20,13 @@ function SystemsPage() {
 	const [name, setName] = useState("");
 	const [busy, setBusy] = useState("");
 	const [message, setMessage] = useState("");
+	const [selectedSystemId, setSelectedSystemId] = useState("");
+	const [tab, setTab] = useState<"settings" | "conventions" | "versions">(
+		"settings"
+	);
+	const activeSystemId =
+		systems.data?.find((system) => system.id === selectedSystemId)?.id ??
+		systems.data?.[0]?.id;
 	async function create(event: FormEvent) {
 		event.preventDefault();
 		if (!name.trim()) {
@@ -26,7 +35,9 @@ function SystemsPage() {
 		setBusy("create");
 		setMessage("");
 		try {
-			await trpcClient.systems.create.mutate({ name });
+			const created = await trpcClient.systems.create.mutate({ name });
+			setSelectedSystemId(created.id);
+			setTab("settings");
 			setName("");
 			await queryClient.invalidateQueries();
 			setMessage("Draftを作成しました。");
@@ -66,21 +77,38 @@ function SystemsPage() {
 		}
 	}
 	return (
-		<main className="page">
+		<main className="page systems-page">
 			<div className="page-heading">
 				<div>
-					<p className="eyebrow">MY SYSTEMS</p>
-					<h1>自分の基準を、版として残す。</h1>
-					<p>公開したVersionは変更せず、振り返りの基準を守ります。</p>
+					<h1>My Systems</h1>
+					<p>ペアの約束を、ひとつのシステムに。</p>
 				</div>
+				{Boolean(systems.data?.length) && (
+					<label className="system-switcher">
+						<IconStack2 aria-hidden="true" size={16} />
+						<span className="sr-only">編集するSystem</span>
+						<select
+							onChange={(event) => setSelectedSystemId(event.target.value)}
+							value={activeSystemId}
+						>
+							{systems.data?.map((system) => (
+								<option key={system.id} value={system.id}>
+									{system.name}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
 			</div>
 			<form className="create-system" onSubmit={create}>
 				<input
+					aria-label="新しいSystemの名前"
 					onChange={(event) => setName(event.target.value)}
 					placeholder="例: Standard 15–17 NT"
 					value={name}
 				/>
 				<Button disabled={busy === "create"} type="submit">
+					<IconPlus aria-hidden="true" size={16} />
 					新しいDraftを作る
 				</Button>
 			</form>
@@ -90,42 +118,86 @@ function SystemsPage() {
 				</p>
 			)}
 			<section className="card-grid">
-				{systems.data?.map((system) => (
-					<article className="system-card" key={system.id}>
-						<div className="card-top">
-							<span>♢</span>
-							<small>DRAFT + {system.versions.length} VERSION</small>
-						</div>
-						<h2>{system.name}</h2>
-						<p>JCBL_LIST_A_2026_05_01</p>
-						<div className="system-meta">
-							<span>
-								<b>{system.draft?.adoptedOfficialItemIds.length ?? 0}</b>{" "}
-								採用ルール
-							</span>
-							<span>
-								<b>{system.versions.length}</b> 公開版
-							</span>
-						</div>
-						<Button
-							disabled={busy === system.id}
-							onClick={() => publish(system.id)}
-							type="button"
-							variant="secondary"
-						>
-							{busy === system.id ? "公開中…" : "新Versionを公開"}
-						</Button>
-						{system.draft && (
-							<SystemEditor
-								busy={busy === `${system.id}:draft`}
-								draft={system.draft}
-								onSave={(data) => saveDraft(system.id, data)}
-								rules={rules.data ?? []}
-								systemId={system.id}
-							/>
-						)}
-					</article>
-				))}
+				{systems.data
+					?.filter((system) => system.id === activeSystemId)
+					.map((system) => (
+						<article className="system-card" key={system.id}>
+							<div className="card-top">
+								<span>
+									<IconStack2 aria-hidden="true" size={20} stroke={1.7} />
+								</span>
+								<small>DRAFT + {system.versions.length} VERSION</small>
+							</div>
+							<h2>{system.name}</h2>
+							<p>JCBL リストA · 2026.05.01</p>
+							<div className="system-meta">
+								<span>
+									<b>{system.draft?.adoptedOfficialItemIds.length ?? 0}</b>{" "}
+									採用ルール
+								</span>
+								<span>
+									<b>{system.versions.length}</b> 公開版
+								</span>
+							</div>
+							<Button
+								disabled={busy === system.id}
+								onClick={() => publish(system.id)}
+								type="button"
+								variant="secondary"
+							>
+								{busy === system.id ? "公開中…" : "新Versionを公開"}
+							</Button>
+							<div className="system-tabs">
+								<button
+									aria-pressed={tab === "settings"}
+									onClick={() => setTab("settings")}
+									type="button"
+								>
+									全体設定
+								</button>
+								<button
+									aria-pressed={tab === "conventions"}
+									onClick={() => setTab("conventions")}
+									type="button"
+								>
+									採用する方式
+								</button>
+								<button
+									aria-pressed={tab === "versions"}
+									onClick={() => setTab("versions")}
+									type="button"
+								>
+									Versions
+								</button>
+							</div>
+							<div className="system-version-list" hidden={tab !== "versions"}>
+								{system.versions.map((version) => (
+									<article key={version.id}>
+										<h3>Version {version.versionNumber}</h3>
+										<p>
+											{version.adoptedOfficialItemIds.length}分類を採用 ·
+											公開済みの設定は固定されています。
+										</p>
+									</article>
+								))}
+								{system.versions.length === 0 && (
+									<p>公開したVersionはまだありません。</p>
+								)}
+							</div>
+							<div hidden={tab === "versions"}>
+								{system.draft && (
+									<SystemEditor
+										busy={busy === `${system.id}:draft`}
+										draft={system.draft}
+										onSave={(data) => saveDraft(system.id, data)}
+										rules={rules.data ?? []}
+										systemId={system.id}
+										tab={tab}
+									/>
+								)}
+							</div>
+						</article>
+					))}
 			</section>
 			{systems.data?.length === 0 && (
 				<div className="empty panel">
@@ -152,6 +224,7 @@ function SystemEditor({
 	onSave,
 	rules,
 	systemId,
+	tab,
 }: {
 	busy: boolean;
 	draft: Draft;
@@ -160,6 +233,7 @@ function SystemEditor({
 	) => Promise<void>;
 	rules: Rules;
 	systemId: string;
+	tab: "settings" | "conventions" | "versions";
 }) {
 	const [previewSettings, setPreviewSettings] = useState(draft.settings);
 	const [previewVariants, setPreviewVariants] = useState(
@@ -444,210 +518,241 @@ function SystemEditor({
 		"signalPriority3",
 	] as const;
 	return (
-		<details className="system-editor">
-			<summary>Draftを編集</summary>
-			<form onChange={updatePreview} onSubmit={submit}>
-				<h3>コンベンション全体の設定 · 用語の定義</h3>
-				<fieldset className="convention-global-settings">
-					<legend>バランスハンド</legend>
-					{(["4333", "4432", "5332", "5422"] as const).map((shape) => (
-						<label key={shape}>
-							<input
-								defaultChecked={draft.settings.handDefinitions.balancedShapes.includes(
-									shape
-								)}
-								name="balancedShapes"
-								type="checkbox"
-								value={shape}
-							/>
-							{shape}
-							{shape === "5422" ? "（準バランスを含める拡張／従来設定）" : ""}
-						</label>
-					))}
-					<p aria-live="polite">
-						現在の定義：{describeConventionTerm("balanced", previewSettings)}
-					</p>
-					<small>
-						このSystem内でバランスハンドを参照する説明・注釈・評価に共通で使用します。公開済みVersionは変更しません。
-					</small>
-				</fieldset>
+		<section className="system-editor">
+			<form noValidate onChange={updatePreview} onSubmit={submit}>
 				{formError && (
 					<p className="error" role="alert">
 						{formError}
 					</p>
 				)}
-				<h3>Natural settings</h3>
-				<div className="settings-grid">
-					<label>
-						<input
-							defaultChecked={draft.settings.opening.oneNtFiveCardMajor}
-							name="oneNtFiveCardMajor"
-							type="checkbox"
-						/>
-						全体定義に含まれる5枚メジャーでも1NTを優先
-					</label>
-					<label>
-						<input
-							defaultChecked={
-								draft.settings.responseRebid.staymanExcludeFiveCardMajor
-							}
-							name="staymanExcludeFiveCardMajor"
-							type="checkbox"
-						/>
-						Stayman通常経路から5枚以上メジャーを除く
-					</label>
-					<label>
-						<input
-							defaultChecked={draft.settings.responseRebid.weakStayman}
-							name="weakStayman"
-							type="checkbox"
-						/>
-						弱いStayman経路（両M4枚・♦4枚以上→返答にPass）
-					</label>
-					{numberFields.map(([name, label, value]) => (
-						<label key={name}>
-							{label}
+				<div hidden={tab !== "settings"}>
+					<h3>コンベンション全体の設定 · 用語の定義</h3>
+					<fieldset className="convention-global-settings">
+						<legend>バランスハンド</legend>
+						{(["4333", "4432", "5332", "5422"] as const).map((shape) => (
+							<label key={shape}>
+								<input
+									defaultChecked={draft.settings.handDefinitions.balancedShapes.includes(
+										shape
+									)}
+									name="balancedShapes"
+									type="checkbox"
+									value={shape}
+								/>
+								{shape}
+								{shape === "5422" ? "（準バランスを含める拡張／従来設定）" : ""}
+							</label>
+						))}
+						<p aria-live="polite">
+							現在の定義：{describeConventionTerm("balanced", previewSettings)}
+						</p>
+						<small>
+							このSystem内でバランスハンドを参照する説明・注釈・評価に共通で使用します。公開済みVersionは変更しません。
+						</small>
+					</fieldset>
+					<h3>オープン・応答・カーディングの設定</h3>
+					<div className="settings-grid">
+						<label>
 							<input
-								defaultValue={value}
-								max="37"
-								min="0"
-								name={name}
-								required
-								type="number"
+								defaultChecked={draft.settings.opening.oneNtFiveCardMajor}
+								name="oneNtFiveCardMajor"
+								type="checkbox"
 							/>
+							全体定義に含まれる5枚メジャーでも1NTを優先
 						</label>
-					))}
-					<label>
-						<input
-							defaultChecked={draft.settings.opening.allowSingletonTopHonor}
-							name="allowSingletonTopHonor"
-							type="checkbox"
-						/>
-						Natural NTでシングルトン・トップオナーの4-4-4-1を許可
-					</label>
-					<label>
-						Stayman 両4枚メジャー応答
-						<select
-							defaultValue={
-								draft.settings.responseRebid.staymanBothMajorsResponse
-							}
-							name="staymanBothMajorsResponse"
-						>
-							<option value="H">2♥</option>
-							<option value="S">2♠</option>
-						</select>
-					</label>
-					<label>
-						Feature ask 最低アナー
-						<select
-							defaultValue={
-								draft.settings.responseRebid.weakTwoFeatureMinimumHonor
-							}
-							name="weakTwoFeatureMinimumHonor"
-						>
-							<option>A</option>
-							<option>K</option>
-						</select>
-					</label>
-					<label>
-						A/K from AK
-						<select defaultValue={draft.settings.lead.fromAk} name="fromAk">
-							<option>A</option>
-							<option>K</option>
-						</select>
-					</label>
-					<label>
-						Small-card lead
-						<select
-							defaultValue={draft.settings.lead.fromSmall}
-							name="fromSmall"
-						>
-							<option value="FOURTH_HIGHEST">Fourth highest</option>
-							<option value="TOP_OF_NOTHING">Top of Nothing</option>
-							<option value="MUD">MUD</option>
-						</select>
-					</label>
-					<label>
-						<input
-							defaultChecked={draft.settings.competitive.lightnerRequireVoid}
-							name="lightnerRequireVoid"
-							type="checkbox"
-						/>
-						Lightner Doubleは客観的なvoidを必要とする
-					</label>
-					{signalPriorityFields.map((field, index) => (
-						<label key={field}>
-							Signal優先順位 {index + 1}
+						<label>
+							<input
+								defaultChecked={
+									draft.settings.responseRebid.staymanExcludeFiveCardMajor
+								}
+								name="staymanExcludeFiveCardMajor"
+								type="checkbox"
+							/>
+							Stayman通常経路から5枚以上メジャーを除く
+						</label>
+						<label>
+							<input
+								defaultChecked={draft.settings.responseRebid.weakStayman}
+								name="weakStayman"
+								type="checkbox"
+							/>
+							弱いStayman経路（両M4枚・♦4枚以上→返答にPass）
+						</label>
+						{numberFields.map(([name, label, value]) => (
+							<label key={name}>
+								{label}
+								<input
+									defaultValue={value}
+									max="37"
+									min="0"
+									name={name}
+									required
+									type="number"
+								/>
+							</label>
+						))}
+						<label>
+							<input
+								defaultChecked={draft.settings.opening.allowSingletonTopHonor}
+								name="allowSingletonTopHonor"
+								type="checkbox"
+							/>
+							Natural NTでシングルトン・トップオナーの4-4-4-1を許可
+						</label>
+						<label>
+							Stayman 両4枚メジャー応答
 							<select
-								defaultValue={draft.settings.signal.priority[index]}
-								name={field}
+								defaultValue={
+									draft.settings.responseRebid.staymanBothMajorsResponse
+								}
+								name="staymanBothMajorsResponse"
 							>
-								{signalOptions.map((option) => (
-									<option key={option}>{option}</option>
-								))}
+								<option value="H">2♥</option>
+								<option value="S">2♠</option>
 							</select>
 						</label>
-					))}
-				</div>
-				<h3>採用Rule / Variant</h3>
-				<div className="rule-selector">
-					{rules.map((rule) => (
-						<div key={rule.officialItemId}>
-							<label>
-								<input
-									defaultChecked={draft.adoptedOfficialItemIds.includes(
-										rule.officialItemId
-									)}
-									name={`rule:${rule.officialItemId}`}
-									type="checkbox"
-								/>
-								<strong>
-									{rule.officialItemId} {rule.title}
-								</strong>
-							</label>
-							<div>
-								{rule.variants
-									.filter(
-										(variant) =>
-											rule.officialItemId !== "A-CA-01" ||
-											variant === "Honor sequence"
-									)
-									.map((variant) => (
-										<label key={variant}>
-											<input
-												defaultChecked={draft.selectedVariants[
-													rule.officialItemId
-												]?.includes(variant)}
-												name={`variant:${rule.officialItemId}:${variant}`}
-												type="checkbox"
-											/>
-											{variant}
-										</label>
+						<label>
+							Feature ask 最低アナー
+							<select
+								defaultValue={
+									draft.settings.responseRebid.weakTwoFeatureMinimumHonor
+								}
+								name="weakTwoFeatureMinimumHonor"
+							>
+								<option>A</option>
+								<option>K</option>
+							</select>
+						</label>
+						<label>
+							A/K from AK
+							<select defaultValue={draft.settings.lead.fromAk} name="fromAk">
+								<option>A</option>
+								<option>K</option>
+							</select>
+						</label>
+						<label>
+							Small-card lead
+							<select
+								defaultValue={draft.settings.lead.fromSmall}
+								name="fromSmall"
+							>
+								<option value="FOURTH_HIGHEST">Fourth highest</option>
+								<option value="TOP_OF_NOTHING">Top of Nothing</option>
+								<option value="MUD">MUD</option>
+							</select>
+						</label>
+						<label>
+							<input
+								defaultChecked={draft.settings.competitive.lightnerRequireVoid}
+								name="lightnerRequireVoid"
+								type="checkbox"
+							/>
+							Lightner Doubleは客観的なvoidを必要とする
+						</label>
+						{signalPriorityFields.map((field, index) => (
+							<label key={field}>
+								Signal優先順位 {index + 1}
+								<select
+									defaultValue={draft.settings.signal.priority[index]}
+									name={field}
+								>
+									{signalOptions.map((option) => (
+										<option key={option}>{option}</option>
 									))}
+								</select>
+							</label>
+						))}
+					</div>
+				</div>
+				<div hidden={tab !== "conventions"}>
+					<h3>採用Rule / Variant</h3>
+					<div className="rule-selector">
+						{rules.map((rule) => (
+							<div key={rule.officialItemId}>
+								<label>
+									<input
+										defaultChecked={draft.adoptedOfficialItemIds.includes(
+											rule.officialItemId
+										)}
+										name={`rule:${rule.officialItemId}`}
+										type="checkbox"
+									/>
+									<strong>
+										{rule.officialItemId} {rule.title}
+									</strong>
+								</label>
+								<div>
+									{rule.variants
+										.filter(
+											(variant) =>
+												rule.officialItemId !== "A-CA-01" ||
+												variant === "Honor sequence"
+										)
+										.map((variant) => (
+											<label key={variant}>
+												<input
+													defaultChecked={draft.selectedVariants[
+														rule.officialItemId
+													]?.includes(variant)}
+													name={`variant:${rule.officialItemId}:${variant}`}
+													type="checkbox"
+												/>
+												{variant}
+											</label>
+										))}
+								</div>
+								{rule.officialItemId === "A-CA-01" && (
+									<p>
+										小札とAKの方式は上の「Small-card lead」「A/K from
+										AK」で選択します。現在：{previewSettings.lead.fromSmall} /{" "}
+										{previewSettings.lead.fromAk} from AK
+									</p>
+								)}
+								<details className="convention-draft-rules">
+									<summary>採用するルールの説明・条件を確認</summary>
+									<SystemRulePreview
+										adopted={previewAdopted.includes(rule.officialItemId)}
+										officialItemId={rule.officialItemId as OfficialItemId}
+										selectedVariants={
+											previewVariants[rule.officialItemId] ?? []
+										}
+										settings={previewSettings}
+									/>
+								</details>
 							</div>
-							{rule.officialItemId === "A-CA-01" && (
-								<p>
-									小札とAKの方式は上の「Small-card lead」「A/K from
-									AK」で選択します。現在：{previewSettings.lead.fromSmall} /{" "}
-									{previewSettings.lead.fromAk} from AK
-								</p>
-							)}
-							<details className="convention-draft-rules">
-								<summary>採用するルールの説明・条件を確認</summary>
-								<ConventionRuleSet
-									adopted={previewAdopted.includes(rule.officialItemId)}
-									officialItemId={rule.officialItemId as OfficialItemId}
-									selectedVariants={previewVariants[rule.officialItemId] ?? []}
-									settings={previewSettings}
-								/>
-							</details>
-						</div>
-					))}
+						))}
+					</div>
 				</div>
 				<Button disabled={busy} type="submit">
 					{busy ? "保存中…" : "Draftを保存"}
 				</Button>
 			</form>
-		</details>
+		</section>
+	);
+}
+
+function SystemRulePreview(
+	props: React.ComponentProps<typeof ConventionRuleSet>
+) {
+	const topics = getConventionTopics(props.officialItemId);
+	const [selected, setSelected] = useState(topics[0]?.key);
+	const topic = topics.find((entry) => entry.key === selected) ?? topics[0];
+	return (
+		<>
+			<label className="convention-variant-picker">
+				表示する項目
+				<select
+					onChange={(event) => setSelected(event.target.value)}
+					value={selected}
+				>
+					{topics.map((entry) => (
+						<option key={entry.key} value={entry.key}>
+							{entry.title}
+						</option>
+					))}
+				</select>
+			</label>
+			<ConventionRuleSet {...props} topic={topic} />
+		</>
 	);
 }
