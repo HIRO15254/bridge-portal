@@ -43,6 +43,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bridge-portal/api": "workspace:*",
+        "@bridge-portal/domain": "workspace:*",
         "@bridge-portal/env": "workspace:*",
         "@radix-ui/react-slot": "^1.3.3",
         "@tailwindcss/vite": "^4.2.2",

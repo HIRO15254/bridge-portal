@@ -58,10 +58,14 @@ export function normalizeSystemSettings(input: unknown): SystemSettings {
 	const signal = isRecord(source.signal) ? source.signal : {};
 
 	return systemSettingsSchema.parse({
+		handDefinitions: source.handDefinitions,
 		opening: { ...defaultSystemSettings.opening, ...opening },
 		responseRebid: {
 			...defaultSystemSettings.responseRebid,
 			...responseRebid,
+			staymanMinHcp: responseRebid.staymanMinHcp ?? 0,
+			staymanExcludeFiveCardMajor:
+				responseRebid.staymanExcludeFiveCardMajor ?? false,
 		},
 		overcall: { ...defaultSystemSettings.overcall, ...overcall },
 		competitive: {
@@ -467,6 +471,18 @@ export function validateSystemDraft(
 	if (settings) {
 		validateSettingsRanges(settings, issues);
 		validateLeadSettings(draft, settings, adopted, issues);
+		if (
+			(adopted.has("A-RR-02") || adopted.has("A-RR-07")) &&
+			(settings.opening.oneNtMinHcp < 15 ||
+				settings.opening.oneNtMaxHcp - settings.opening.oneNtMinHcp > 5)
+		) {
+			issues.push({
+				code: "INVALID_RANGE",
+				officialItemId: "A-RR-09",
+				message:
+					"リストAでStayman／Gerberを採用する1NTは、下限15 HCP以上・幅5 HCP以内にしてください。",
+			});
+		}
 	}
 	validateTemplateConflicts(draft, adopted, issues);
 	validateVariantDependencies(draft, adopted, issues);

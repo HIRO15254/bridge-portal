@@ -1,3 +1,4 @@
+import { isNaturalNtShape, staymanHandQualifies } from "./convention-terms";
 import {
 	getRule,
 	JCBL_LIST_A_2026_05_01,
@@ -13,7 +14,7 @@ import type {
 	SystemSnapshot,
 } from "./types";
 
-export const RULE_ENGINE_VERSION = "2.2.1" as const;
+export const RULE_ENGINE_VERSION = "2.3.0" as const;
 
 export interface EvaluationInput {
 	auction?: AuctionCall[];
@@ -217,25 +218,6 @@ function losersInSuit(suit: string): number {
 
 function losers(hand: string): number {
 	return hand.split(".").reduce((total, suit) => total + losersInSuit(suit), 0);
-}
-
-function isBalanced(hand: string, allowSingletonTopHonor = false): boolean {
-	const suits = hand.split(".");
-	const lengths = suits.map((suit) => suit.length);
-	if (Math.min(...lengths) >= 2 && Math.max(...lengths) <= 5) {
-		return true;
-	}
-	if (!allowSingletonTopHonor) {
-		return false;
-	}
-	const singletonIndex = lengths.indexOf(1);
-	return (
-		singletonIndex >= 0 &&
-		lengths.every((length, index) =>
-			index === singletonIndex ? length === 1 : length === 4
-		) &&
-		["A", "K", "Q"].includes(suits[singletonIndex] ?? "")
-	);
 }
 
 function firstHeroCall(context: EvaluationContext): AuctionCall | undefined {
@@ -499,7 +481,14 @@ function naturalNtOpeningAgreement(
 		valid:
 			context.points >= profile.minimum &&
 			context.points <= profile.maximum &&
-			isBalanced(context.hand, profile.allowSingletonTopHonor),
+			isNaturalNtShape(
+				context.hand,
+				context.system.settings,
+				profile.allowSingletonTopHonor
+			) &&
+			(bid.level !== 1 ||
+				opening.oneNtFiveCardMajor ||
+				Math.max(context.lengths.H, context.lengths.S) <= 4),
 	};
 }
 
@@ -610,6 +599,14 @@ function evaluateNaturalOpening(
 		hcp: context.points,
 		suitLength: bidSuitLength(context, bid),
 	};
+	if (candidate === "1NT" && bid.level === 1 && bid.strain !== "NT") {
+		return wrong(
+			rule,
+			"NATURAL_1NT_PRIORITY_NOT_FOLLOWED",
+			{ ...facts, expected: "1NT" },
+			action
+		);
+	}
 	return agreement.valid
 		? complied(rule, "NATURAL_OPENING_COMPLIED", facts, action)
 		: wrong(rule, "NATURAL_OPENING_OUTSIDE_AGREEMENT", facts, action);
@@ -786,8 +783,9 @@ function evaluateNaturalOpenerRebid(
 	const length = bidSuitLength(context, bid);
 	const shapeValid =
 		bid.strain === "NT"
-			? isBalanced(
+			? isNaturalNtShape(
 					context.hand,
+					context.system.settings,
 					context.system.settings.opening.allowSingletonTopHonor
 				)
 			: length >= minimumLength;
@@ -886,8 +884,9 @@ function evaluateNaturalResponderRebid(
 	const length = bidSuitLength(context, bid);
 	const shapeValid =
 		bid.strain === "NT"
-			? isBalanced(
+			? isNaturalNtShape(
 					context.hand,
+					context.system.settings,
 					context.system.settings.opening.allowSingletonTopHonor
 				)
 			: length >= minimumLength;
@@ -1036,6 +1035,16 @@ function evaluateStaymanResponse(
 	if (!(ask && action)) {
 		return;
 	}
+	if (
+		context.calls.some(
+			(call) =>
+				call.index > opening.index &&
+				call.index < ask.index &&
+				normalizeCall(call.call) !== "PASS"
+		)
+	) {
+		return;
+	}
 	const interference = context.calls.some(
 		(candidate) =>
 			candidate.index > ask.index &&
@@ -1082,13 +1091,42 @@ function evaluateStayman(rule: RuleDefinition, context: EvaluationContext) {
 		return notApplicable(rule);
 	}
 	const call = normalizeCall(response.action.call);
-	const eligible = context.lengths.H >= 4 || context.lengths.S >= 4;
+	const responseIndex = response.action.index;
+	if (
+		context.calls.some(
+			(action) =>
+				action.index > response.opening.index &&
+				action.index < responseIndex &&
+				!samePartnership(action.seat, context.heroSeat) &&
+				normalizeCall(action.call) !== "PASS"
+		)
+	) {
+		return indeterminate(rule, "STAYMAN_INTERFERENCE_NOT_OBJECTIVE");
+	}
+	const eligible = staymanHandQualifies(
+		context.hand,
+		context.points,
+		context.system.settings
+	);
 	const facts = {
 		hearts: context.lengths.H,
 		hcp: context.points,
 		spades: context.lengths.S,
 	};
 	if (call === "2C") {
+		if (
+			eligible &&
+			context.points < context.system.settings.responseRebid.staymanMinHcp
+		) {
+			const continuation = evaluateWeakStaymanContinuation(
+				rule,
+				context,
+				response.action
+			);
+			if (continuation) {
+				return continuation;
+			}
+		}
 		return eligible
 			? complied(rule, "STAYMAN_USED", facts, response.action)
 			: wrong(rule, "STAYMAN_WITHOUT_FOUR_CARD_MAJOR", facts, response.action);
@@ -1101,6 +1139,43 @@ function evaluateStayman(rule: RuleDefinition, context: EvaluationContext) {
 				response.action
 			)
 		: notApplicable(rule);
+}
+
+function evaluateWeakStaymanContinuation(
+	rule: RuleDefinition,
+	context: EvaluationContext,
+	ask: AuctionCall
+): RuleEvaluationResult | undefined {
+	const reply = context.calls.find(
+		(action) =>
+			action.index > ask.index && action.seat === partner(context.heroSeat)
+	);
+	const next = reply ? heroCallAfter(context, reply.index) : undefined;
+	if (!(reply && next)) {
+		return;
+	}
+	if (
+		context.calls.some(
+			(action) =>
+				action.index > ask.index &&
+				action.index < next.index &&
+				!samePartnership(action.seat, context.heroSeat) &&
+				normalizeCall(action.call) !== "PASS"
+		)
+	) {
+		return indeterminate(rule, "WEAK_STAYMAN_INTERFERENCE_NOT_OBJECTIVE");
+	}
+	if (!["2D", "2H", "2S"].includes(normalizeCall(reply.call))) {
+		return;
+	}
+	const facts = {
+		actual: normalizeCall(next.call),
+		expected: "PASS",
+		hcp: context.points,
+	};
+	return facts.actual === "PASS"
+		? complied(rule, "WEAK_STAYMAN_SIGNOFF_COMPLIED", facts, next)
+		: wrong(rule, "WEAK_STAYMAN_SIGNOFF_REQUIRED", facts, next);
 }
 
 function evaluateArtificialTwoDiamond(
@@ -1839,44 +1914,20 @@ function evaluateGrandSlamForce(
 
 function evaluateOneNtRange(rule: RuleDefinition, context: EvaluationContext) {
 	const { oneNtMaxHcp, oneNtMinHcp } = context.system.settings.opening;
-	const rangeAllowed = oneNtMinHcp >= 15 && oneNtMaxHcp - oneNtMinHcp <= 5;
-	const action = firstHeroCall(context);
-	if (action && !firstContractCall(callsBefore(context, action))) {
-		const call = normalizeCall(action.call);
-		const inRange =
-			context.points >= oneNtMinHcp &&
-			context.points <= oneNtMaxHcp &&
-			isBalanced(
-				context.hand,
-				context.system.settings.opening.allowSingletonTopHonor
-			);
-		if (call === "1NT") {
-			return rangeAllowed && inRange
-				? complied(
-						rule,
-						"NT_RANGE_AND_OPENING_COMPLIED",
-						{ hcp: context.points, oneNtMaxHcp, oneNtMinHcp },
-						action
-					)
-				: wrong(
-						rule,
-						"NT_OPENING_OR_RANGE_DISALLOWED",
-						{ hcp: context.points, oneNtMaxHcp, oneNtMinHcp },
-						action
-					);
-		}
-		if (rangeAllowed && inRange) {
-			return missed(
-				rule,
-				"NATURAL_1NT_OPENING_MISSED",
-				{ actual: call, hcp: context.points, oneNtMaxHcp, oneNtMinHcp },
-				action
-			);
-		}
+	const usesNtConvention = context.system.adoptedOfficialItemIds.some(
+		(id) => id === "A-RR-02" || id === "A-RR-07"
+	);
+	if (!usesNtConvention) {
+		return notApplicable(rule, "NT_CONVENTION_NOT_ADOPTED");
 	}
-	return notApplicable(rule);
+	const rangeAllowed = oneNtMinHcp >= 15 && oneNtMaxHcp - oneNtMinHcp <= 5;
+	return rangeAllowed
+		? notApplicable(rule, "NT_SETTINGS_VALIDATED_AT_SYSTEM_LEVEL")
+		: indeterminate(rule, "INVALID_SYSTEM_NT_CONVENTION_RANGE", {
+				oneNtMinHcp,
+				oneNtMaxHcp,
+			});
 }
-
 function evaluateFitShowingJump(
 	rule: RuleDefinition,
 	context: EvaluationContext
@@ -2577,47 +2628,79 @@ function evaluateSignals(rule: RuleDefinition, context: EvaluationContext) {
 			signalPriority: signalPriority ?? "UNSET",
 		});
 	}
+	const contract = parseBid(
+		(context.input.deal.contract ?? "").replaceAll("X", "")
+	);
+	if (!(contract && context.input.deal.declarer)) {
+		return indeterminate(rule, "SIGNAL_CONTRACT_CONTEXT_UNKNOWN");
+	}
 	for (const suit of suitOrder) {
+		if (suit === contract.strain) {
+			continue;
+		}
 		const cards = countActions.filter((action) => action.card[0] === suit);
 		if (cards.length < 2 || original[suit].length < 2) {
 			continue;
 		}
-		const firstRank = cards[0]?.card[1] ?? "";
-		const secondRank = cards[1]?.card[1] ?? "";
-		const highLow =
-			rankOrder.indexOf(firstRank) < rankOrder.indexOf(secondRank);
-		const even = original[suit].length % 2 === 0;
-		const facts = {
-			even,
-			first: cards[0]?.card ?? "",
-			originalLength: original[suit].length,
-			second: cards[1]?.card ?? "",
-			suit,
-		};
-		if (highLow === even) {
-			return complied(rule, "COUNT_SIGNAL_COMPLIED", facts, cards[0]);
-		}
-		return wrong(rule, "COUNT_SIGNAL_REVERSED", facts, cards[0]);
-	}
-	if (!context.input.playComplete) {
-		return indeterminate(rule, "SIGNAL_SEQUENCE_INCOMPLETE");
-	}
-	const first = countActions[0];
-	if (first) {
-		const suit = first.card[0] as (typeof suitOrder)[number];
-		const holding = original[suit];
-		if (holding.length >= 2) {
-			return missed(
-				rule,
-				"COUNT_SIGNAL_OPPORTUNITY_NOT_COMPLETED",
-				{ first: first.card, originalLength: holding.length, suit },
-				first
-			);
+		const verdict = evaluateSafeCountPair(
+			rule,
+			cards,
+			heroPlays,
+			original[suit]
+		);
+		if (verdict) {
+			return verdict;
 		}
 	}
-	return indeterminate(rule, "ATTITUDE_OR_PREFERENCE_INTENT_NOT_OBJECTIVE", {
+	return indeterminate(rule, "COUNT_SEQUENCE_OR_SAFE_CHOICE_UNCONFIRMED", {
 		heroPlayCount: heroPlays.length,
 	});
+}
+
+function evaluateSafeCountPair(
+	rule: RuleDefinition,
+	cards: PlayAction[],
+	heroPlays: PlayAction[],
+	original: string
+): RuleEvaluationResult | undefined {
+	const [first, second] = cards;
+	if (!(first && second)) {
+		return;
+	}
+	const suit = first.card[0];
+	const previouslyPlayed = heroPlays
+		.filter((action) => action.index < first.index && action.card[0] === suit)
+		.map((action) => action.card[1]);
+	const starting = [...original].filter(
+		(rank) => !previouslyPlayed.includes(rank)
+	);
+	const firstRank = first.card[1] ?? "";
+	const secondRank = second.card[1] ?? "";
+	// Adjacent low cards are interchangeable for trick-taking. Other choices need
+	// strategic information that the imported play record does not establish.
+	const safe =
+		starting.includes(firstRank) &&
+		starting.includes(secondRank) &&
+		"98765432".includes(firstRank) &&
+		"98765432".includes(secondRank) &&
+		Math.abs(rankOrder.indexOf(firstRank) - rankOrder.indexOf(secondRank)) ===
+			1;
+	if (!safe) {
+		return;
+	}
+	const even = starting.length % 2 === 0;
+	const highLow = rankOrder.indexOf(firstRank) < rankOrder.indexOf(secondRank);
+	const facts = {
+		even,
+		first: first.card,
+		second: second.card,
+		startingLength: starting.length,
+		suit: suit ?? "",
+		safeChoice: "ADJACENT_LOW_CARDS",
+	};
+	return highLow === even
+		? complied(rule, "COUNT_SIGNAL_COMPLIED", facts, first)
+		: wrong(rule, "COUNT_SIGNAL_REVERSED", facts, first);
 }
 
 export const RULE_EVALUATORS: Record<OfficialItemId, RuleEvaluator> = {

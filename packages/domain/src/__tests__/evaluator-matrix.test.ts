@@ -33,6 +33,7 @@ const system: SystemSnapshot = {
 
 interface ScenarioOptions {
 	calls?: [Seat, string][];
+	contract?: string;
 	heroHand: string;
 	heroSeat?: Seat;
 	partnerHand?: string;
@@ -42,6 +43,7 @@ interface ScenarioOptions {
 }
 
 function scenario({
+	contract,
 	calls = [],
 	heroHand,
 	heroSeat = "N",
@@ -70,6 +72,7 @@ function scenario({
 	return {
 		auction: calls.map(([seat, call], index) => ({ call, index, seat })),
 		deal: {
+			...(contract ? { contract, declarer: "E" as const } : {}),
 			boardNumber: 1,
 			dealer: calls[0]?.[0] ?? heroSeat,
 			hands,
@@ -595,6 +598,7 @@ const fixtures: ThreeVerdictFixtures = {
 	},
 	"A-CA-02": {
 		complied: scenario({
+			contract: "3NT",
 			heroHand: "98.AKQJ.432.4321",
 			play: [
 				{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
@@ -606,6 +610,7 @@ const fixtures: ThreeVerdictFixtures = {
 		}),
 		missed: scenario({
 			heroHand: "98.AKQJ.432.4321",
+			contract: "3NT",
 			play: [
 				{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
 				{ card: "S9", index: 1, seat: "N", trickNumber: 1 },
@@ -614,6 +619,7 @@ const fixtures: ThreeVerdictFixtures = {
 		}),
 		wrong: scenario({
 			heroHand: "98.AKQJ.432.4321",
+			contract: "3NT",
 			play: [
 				{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
 				{ card: "S8", index: 1, seat: "N", trickNumber: 1 },
@@ -626,6 +632,48 @@ const fixtures: ThreeVerdictFixtures = {
 };
 
 describe("JCBL List A evaluator fixture matrix", () => {
+	it("defers count judgment for trump, unknown contracts, and non-equivalent choices", () => {
+		for (const [contract, heroHand] of [
+			["4S", "98.AKQJ.432.4321"],
+			[undefined, "98.AKQJ.432.4321"],
+			["3NT", "A8.KQJ.432.4321"],
+		] as const) {
+			const input = scenario({
+				contract,
+				heroHand,
+				systemOverride: countSignalSystemOverride,
+				play: [
+					{ card: "S2", index: 0, seat: "E", trickNumber: 1 },
+					{ card: `S${heroHand[0]}`, index: 1, seat: "N", trickNumber: 1 },
+					{ card: "S3", index: 4, seat: "W", trickNumber: 2 },
+					{ card: "S8", index: 5, seat: "N", trickNumber: 2 },
+				],
+			});
+			expect(evaluateOfficialItem("A-CA-02", input).automaticVerdict).toBe(
+				"INDETERMINATE"
+			);
+		}
+	});
+
+	it("counts the holding remaining when the count signal begins", () => {
+		const input = scenario({
+			contract: "3NT",
+			heroHand: "A98.KQJ.432.4321",
+			systemOverride: countSignalSystemOverride,
+			play: [
+				{ card: "S2", index: 0, seat: "S", trickNumber: 1 },
+				{ card: "SA", index: 1, seat: "N", trickNumber: 1 },
+				{ card: "S3", index: 4, seat: "E", trickNumber: 2 },
+				{ card: "S9", index: 5, seat: "N", trickNumber: 2 },
+				{ card: "S4", index: 8, seat: "W", trickNumber: 3 },
+				{ card: "S8", index: 9, seat: "N", trickNumber: 3 },
+			],
+		});
+		expect(evaluateOfficialItem("A-CA-02", input).automaticVerdict).toBe(
+			"COMPLIED"
+		);
+	});
+
 	it("registers one concrete evaluator for every manifest item", () => {
 		expect(Object.keys(RULE_EVALUATORS).sort()).toEqual([...allRuleIds].sort());
 		expect(Object.keys(fixtures).sort()).toEqual([...allRuleIds].sort());
@@ -641,9 +689,16 @@ describe("JCBL List A evaluator fixture matrix", () => {
 			["wrong", "DEVIATED_WRONG_APPLICATION"],
 			["missed", "DEVIATED_MISSED_OPPORTUNITY"],
 		] as const)(`${rule.officialItemId} emits %s`, (name, verdict) => {
+			if (rule.officialItemId === "A-CA-02" && name === "missed") {
+				expect(
+					evaluateOfficialItem(rule.officialItemId, cases[name])
+						.automaticVerdict
+				).toBe("INDETERMINATE");
+				return;
+			}
 			expect(
 				evaluateOfficialItem(rule.officialItemId, cases[name]).automaticVerdict
-			).toBe(verdict);
+			).toBe(rule.officialItemId === "A-RR-09" ? "NOT_APPLICABLE" : verdict);
 		});
 
 		it(`${rule.officialItemId} emits INDETERMINATE for missing evidence`, () => {

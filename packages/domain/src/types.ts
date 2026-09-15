@@ -47,7 +47,16 @@ export interface BridgeDeal {
 }
 
 export const systemSettingsSchema = z.object({
+	handDefinitions: z
+		.object({
+			balancedShapes: z
+				.array(z.enum(["4333", "4432", "5332", "5422"]))
+				.min(1)
+				.refine((shapes) => new Set(shapes).size === shapes.length),
+		})
+		.default({ balancedShapes: ["4333", "4432", "5332", "5422"] }),
 	opening: z.object({
+		oneNtFiveCardMajor: z.boolean().default(true),
 		allowSingletonTopHonor: z.boolean(),
 		fourPlusNtMaxHcp: z.number().int().min(0).max(37),
 		fourPlusNtMinHcp: z.number().int().min(0).max(37),
@@ -73,6 +82,9 @@ export const systemSettingsSchema = z.object({
 		weakTwoMaxHcp: z.number().int().min(0).max(37),
 	}),
 	responseRebid: z.object({
+		staymanMinHcp: z.number().int().min(0).max(37).default(0),
+		staymanExcludeFiveCardMajor: z.boolean().default(false),
+		weakStayman: z.boolean().default(false),
 		minimumResponseHcp: z.number().int().min(0).max(37),
 		invitationalMinHcp: z.number().int().min(0).max(37),
 		gameForcingMinHcp: z.number().int().min(0).max(37),
@@ -125,7 +137,9 @@ export const systemSettingsSchema = z.object({
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 
 export const defaultSystemSettings: SystemSettings = {
+	handDefinitions: { balancedShapes: ["4333", "4432", "5332"] },
 	opening: {
+		oneNtFiveCardMajor: true,
 		allowSingletonTopHonor: false,
 		fourPlusNtMaxHcp: 37,
 		fourPlusNtMinHcp: 28,
@@ -151,6 +165,9 @@ export const defaultSystemSettings: SystemSettings = {
 		weakTwoMaxHcp: 10,
 	},
 	responseRebid: {
+		staymanMinHcp: 8,
+		staymanExcludeFiveCardMajor: true,
+		weakStayman: false,
 		minimumResponseHcp: 6,
 		invitationalMinHcp: 10,
 		gameForcingMinHcp: 13,

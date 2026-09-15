@@ -1,7 +1,13 @@
+import {
+	describeConventionTerm,
+	type OfficialItemId,
+} from "@bridge-portal/domain";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
+import { ConventionRuleSet } from "@/components/convention-rule-set";
 import { Button } from "@/components/ui/button";
+import { readSystemForm, readSystemVariants } from "@/lib/system-form";
 import { queryClient, trpc, trpcClient } from "@/utils/trpc";
 
 export const Route = createFileRoute("/systems")({ component: SystemsPage });
@@ -140,10 +146,6 @@ type Draft = NonNullable<
 >;
 type Rules = Awaited<ReturnType<typeof trpcClient.rules.list.query>>;
 
-function numberValue(data: FormData, name: string): number {
-	return Number(data.get(name));
-}
-
 function SystemEditor({
 	busy,
 	draft,
@@ -159,154 +161,60 @@ function SystemEditor({
 	rules: Rules;
 	systemId: string;
 }) {
+	const [previewSettings, setPreviewSettings] = useState(draft.settings);
+	const [previewVariants, setPreviewVariants] = useState(
+		draft.selectedVariants
+	);
+	const [previewAdopted, setPreviewAdopted] = useState(
+		draft.adoptedOfficialItemIds
+	);
+	const [formError, setFormError] = useState("");
+	function updatePreview(event: FormEvent<HTMLFormElement>) {
+		const data = new FormData(event.currentTarget);
+		try {
+			setPreviewSettings(readSystemForm(data, draft.settings));
+			setFormError("");
+		} catch {
+			setFormError(
+				"設定値を確認してください。バランスハンドの形は1つ以上必要です。説明には直前の有効な設定を表示しています。"
+			);
+		}
+		setPreviewVariants(readSystemVariants(data, rules));
+		setPreviewAdopted(
+			rules
+				.filter((rule) => data.has(`rule:${rule.officialItemId}`))
+				.map((rule) => rule.officialItemId)
+		);
+	}
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		const data = new FormData(event.currentTarget);
+		let submittedSettings: Draft["settings"];
+		try {
+			submittedSettings = readSystemForm(data, draft.settings);
+		} catch {
+			setFormError(
+				"設定値が不正なため保存できません。点数・枚数・バランスハンドの選択を確認してください。"
+			);
+			return;
+		}
 		const adoptedOfficialItemIds = rules
 			.filter((rule) => data.has(`rule:${rule.officialItemId}`))
 			.map((rule) => rule.officialItemId);
-		const selectedVariants = Object.fromEntries(
-			rules.map((rule) => [
-				rule.officialItemId,
-				rule.variants.filter((variant) =>
-					data.has(`variant:${rule.officialItemId}:${variant}`)
-				),
-			])
-		);
-		const selectedSmallLead = String(data.get("fromSmall"));
-		const selectedAkLead = String(data.get("fromAk"));
-		const leadVariants = selectedVariants["A-CA-01"] ?? [];
-		selectedVariants["A-CA-01"] = [
-			...leadVariants.filter(
-				(variant) =>
-					![
-						"Fourth highest",
-						"Top of Nothing",
-						"MUD",
-						"A from AK",
-						"K from AK",
-					].includes(variant)
-			),
-			{
-				FOURTH_HIGHEST: "Fourth highest",
-				MUD: "MUD",
-				TOP_OF_NOTHING: "Top of Nothing",
-			}[selectedSmallLead] ?? "Fourth highest",
-			`${selectedAkLead} from AK`,
-		];
+		const selectedVariants = readSystemVariants(data, rules);
 		await onSave({
 			systemId,
 			adoptedOfficialItemIds,
 			selectedVariants,
-			settings: {
-				opening: {
-					allowSingletonTopHonor: data.has("allowSingletonTopHonor"),
-					fourPlusNtMaxHcp: numberValue(data, "fourPlusNtMaxHcp"),
-					fourPlusNtMinHcp: numberValue(data, "fourPlusNtMinHcp"),
-					fourPlusLevelMaxHcp: numberValue(data, "fourPlusLevelMaxHcp"),
-					fourPlusLevelMinHcp: numberValue(data, "fourPlusLevelMinHcp"),
-					fourPlusLevelMinLength: numberValue(data, "fourPlusLevelMinLength"),
-					naturalStrongTwoMinLength: numberValue(
-						data,
-						"naturalStrongTwoMinLength"
-					),
-					oneLevelMinHcp: numberValue(data, "openingOneLevelMinHcp"),
-					oneClubMinLength: numberValue(data, "oneClubMinLength"),
-					oneDiamondMinLength: numberValue(data, "oneDiamondMinLength"),
-					oneMajorMinLength: numberValue(data, "oneMajorMinLength"),
-					oneNtMinHcp: numberValue(data, "oneNtMinHcp"),
-					oneNtMaxHcp: numberValue(data, "oneNtMaxHcp"),
-					naturalStrongTwoMinHcp: numberValue(data, "naturalStrongTwoMinHcp"),
-					threeLevelMaxHcp: numberValue(data, "threeLevelMaxHcp"),
-					threeLevelMinHcp: numberValue(data, "threeLevelMinHcp"),
-					threeLevelMinLength: numberValue(data, "threeLevelMinLength"),
-					threeNtMaxHcp: numberValue(data, "threeNtMaxHcp"),
-					threeNtMinHcp: numberValue(data, "threeNtMinHcp"),
-					twoNtMaxHcp: numberValue(data, "twoNtMaxHcp"),
-					twoNtMinHcp: numberValue(data, "twoNtMinHcp"),
-					weakTwoMinHcp: numberValue(data, "weakTwoMinHcp"),
-					weakTwoMaxHcp: numberValue(data, "weakTwoMaxHcp"),
-				},
-				responseRebid: {
-					minimumResponseHcp: numberValue(data, "minimumResponseHcp"),
-					invitationalMinHcp: numberValue(data, "invitationalMinHcp"),
-					gameForcingMinHcp: numberValue(data, "gameForcingMinHcp"),
-					openerRebidMinHcp: numberValue(data, "openerRebidMinHcp"),
-					openerRebidNewSuitMinLength: numberValue(
-						data,
-						"openerRebidNewSuitMinLength"
-					),
-					responderRebidMinHcp: numberValue(data, "responderRebidMinHcp"),
-					responderRebidNewSuitMinLength: numberValue(
-						data,
-						"responderRebidNewSuitMinLength"
-					),
-					staymanBothMajorsResponse: String(
-						data.get("staymanBothMajorsResponse")
-					) as "H" | "S",
-					weakResponseMaxHcp: numberValue(data, "weakResponseMaxHcp"),
-					weakTwoInquiryMinHcp: numberValue(data, "weakTwoInquiryMinHcp"),
-					weakTwoFeatureMinimumHonor: String(
-						data.get("weakTwoFeatureMinimumHonor")
-					) as "A" | "K",
-					weakTwoOgustMaximumMinHcp: numberValue(
-						data,
-						"weakTwoOgustMaximumMinHcp"
-					),
-					weakTwoOgustGoodSuitTopHonors: numberValue(
-						data,
-						"weakTwoOgustGoodSuitTopHonors"
-					),
-					blackwoodMinHcp: numberValue(data, "blackwoodMinHcp"),
-					gerberMinHcp: numberValue(data, "gerberMinHcp"),
-					grandSlamForceMinHcp: numberValue(data, "grandSlamForceMinHcp"),
-					grandSlamForceGrandTopHonors: numberValue(
-						data,
-						"grandSlamForceGrandTopHonors"
-					),
-					fitShowingJumpMinHcp: numberValue(data, "fitShowingJumpMinHcp"),
-				},
-				overcall: {
-					oneLevelMinHcp: numberValue(data, "oneLevelMinHcp"),
-					oneLevelMinLength: numberValue(data, "oneLevelMinLength"),
-					twoLevelMinHcp: numberValue(data, "twoLevelMinHcp"),
-					twoLevelMinLength: numberValue(data, "twoLevelMinLength"),
-				},
-				competitive: {
-					takeoutDoubleMinHcp: numberValue(data, "takeoutDoubleMinHcp"),
-					balancingTakeoutDoubleMinHcp: numberValue(
-						data,
-						"balancingTakeoutDoubleMinHcp"
-					),
-					negativeDoubleMinHcp: numberValue(data, "negativeDoubleMinHcp"),
-					negativeDoubleMaxLevel: numberValue(data, "negativeDoubleMaxLevel"),
-					sosRedoubleMaxHcp: numberValue(data, "sosRedoubleMaxHcp"),
-					gameForcingCueMinHcp: numberValue(data, "gameForcingCueMinHcp"),
-					supportCueMinHcp: numberValue(data, "supportCueMinHcp"),
-					lightnerRequireVoid: data.has("lightnerRequireVoid"),
-				},
-				lead: {
-					fromAk: selectedAkLead as "A" | "K",
-					fromSmall: selectedSmallLead as
-						| "FOURTH_HIGHEST"
-						| "TOP_OF_NOTHING"
-						| "MUD",
-					honorSequence: "TOP",
-				},
-				signal: {
-					attitude: "HIGH_ENCOURAGING",
-					count: "HIGH_EVEN",
-					preference: "HIGH_HIGHER_SUIT",
-					priority: [
-						String(data.get("signalPriority1")),
-						String(data.get("signalPriority2")),
-						String(data.get("signalPriority3")),
-					] as ["ATTITUDE", "COUNT", "SUIT_PREFERENCE"],
-				},
-			},
+			settings: submittedSettings,
 		});
 	}
 	const numberFields = [
+		[
+			"staymanMinHcp",
+			"Stayman 通常経路の下限HCP",
+			draft.settings.responseRebid.staymanMinHcp,
+		],
 		[
 			"openingOneLevelMinHcp",
 			"1-level Opening 下限HCP",
@@ -538,9 +446,64 @@ function SystemEditor({
 	return (
 		<details className="system-editor">
 			<summary>Draftを編集</summary>
-			<form onSubmit={submit}>
+			<form onChange={updatePreview} onSubmit={submit}>
+				<h3>コンベンション全体の設定 · 用語の定義</h3>
+				<fieldset className="convention-global-settings">
+					<legend>バランスハンド</legend>
+					{(["4333", "4432", "5332", "5422"] as const).map((shape) => (
+						<label key={shape}>
+							<input
+								defaultChecked={draft.settings.handDefinitions.balancedShapes.includes(
+									shape
+								)}
+								name="balancedShapes"
+								type="checkbox"
+								value={shape}
+							/>
+							{shape}
+							{shape === "5422" ? "（準バランスを含める拡張／従来設定）" : ""}
+						</label>
+					))}
+					<p aria-live="polite">
+						現在の定義：{describeConventionTerm("balanced", previewSettings)}
+					</p>
+					<small>
+						このSystem内でバランスハンドを参照する説明・注釈・評価に共通で使用します。公開済みVersionは変更しません。
+					</small>
+				</fieldset>
+				{formError && (
+					<p className="error" role="alert">
+						{formError}
+					</p>
+				)}
 				<h3>Natural settings</h3>
 				<div className="settings-grid">
+					<label>
+						<input
+							defaultChecked={draft.settings.opening.oneNtFiveCardMajor}
+							name="oneNtFiveCardMajor"
+							type="checkbox"
+						/>
+						全体定義に含まれる5枚メジャーでも1NTを優先
+					</label>
+					<label>
+						<input
+							defaultChecked={
+								draft.settings.responseRebid.staymanExcludeFiveCardMajor
+							}
+							name="staymanExcludeFiveCardMajor"
+							type="checkbox"
+						/>
+						Stayman通常経路から5枚以上メジャーを除く
+					</label>
+					<label>
+						<input
+							defaultChecked={draft.settings.responseRebid.weakStayman}
+							name="weakStayman"
+							type="checkbox"
+						/>
+						弱いStayman経路（両M4枚・♦4枚以上→返答にPass）
+					</label>
 					{numberFields.map(([name, label, value]) => (
 						<label key={name}>
 							{label}
@@ -643,19 +606,41 @@ function SystemEditor({
 								</strong>
 							</label>
 							<div>
-								{rule.variants.map((variant) => (
-									<label key={variant}>
-										<input
-											defaultChecked={draft.selectedVariants[
-												rule.officialItemId
-											]?.includes(variant)}
-											name={`variant:${rule.officialItemId}:${variant}`}
-											type="checkbox"
-										/>
-										{variant}
-									</label>
-								))}
+								{rule.variants
+									.filter(
+										(variant) =>
+											rule.officialItemId !== "A-CA-01" ||
+											variant === "Honor sequence"
+									)
+									.map((variant) => (
+										<label key={variant}>
+											<input
+												defaultChecked={draft.selectedVariants[
+													rule.officialItemId
+												]?.includes(variant)}
+												name={`variant:${rule.officialItemId}:${variant}`}
+												type="checkbox"
+											/>
+											{variant}
+										</label>
+									))}
 							</div>
+							{rule.officialItemId === "A-CA-01" && (
+								<p>
+									小札とAKの方式は上の「Small-card lead」「A/K from
+									AK」で選択します。現在：{previewSettings.lead.fromSmall} /{" "}
+									{previewSettings.lead.fromAk} from AK
+								</p>
+							)}
+							<details className="convention-draft-rules">
+								<summary>採用するルールの説明・条件を確認</summary>
+								<ConventionRuleSet
+									adopted={previewAdopted.includes(rule.officialItemId)}
+									officialItemId={rule.officialItemId as OfficialItemId}
+									selectedVariants={previewVariants[rule.officialItemId] ?? []}
+									settings={previewSettings}
+								/>
+							</details>
 						</div>
 					))}
 				</div>

@@ -8,6 +8,7 @@ const tournamentPattern = /Daily example/;
 const boardPattern = /BOARD 1/;
 const openingRulePattern = /A-OB-01@2026-05-01/;
 const relatedBoardPattern = /Daily example · Board 1/;
+const staymanUrlPattern = /rule=A-RR-02/;
 const parPattern = /^Par /;
 const actualContractMaximumPattern = /^実Contract最大 /;
 const admin = {
@@ -105,7 +106,40 @@ test("新規登録からRule学習と実戦Boardの往復まで完走する", as
 		page.getByRole("heading", { name: "ナチュラル・オープン" })
 	).toBeVisible();
 	await expect(
+		page.getByRole("heading", { name: "自然言語での説明" })
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "プログラム的なルール" })
+	).toBeVisible();
+	await page.getByText("背景・継続・方式の補足", { exact: true }).click();
+	await expect(
+		page.getByRole("heading", { name: "① いつ使うか" })
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "② 何を示すか" })
+	).toBeVisible();
+	await expect(
+		page.getByText(
+			"Weak TwoのHCP＋ビッドスーツ枚数は10以上。10未満のWeak TwoはリストAでは使用不可。"
+		)
+	).toBeVisible();
+	await expect(
 		page.getByRole("link", { name: relatedBoardPattern })
+	).toBeVisible();
+	await page
+		.locator(".rule-row")
+		.filter({ hasText: "Stayman" })
+		.first()
+		.click();
+	await expect(page).toHaveURL(staymanUrlPattern);
+	await expect(page.getByRole("heading", { name: "Stayman" })).toBeVisible();
+	await expect(
+		page
+			.getByText(
+				"すぐ上の♣を人工的にBidし、オープナーの4枚メジャーを問い合わせます（例：1NT–2♣）。",
+				{ exact: true }
+			)
+			.first()
 	).toBeVisible();
 
 	const closedStatus = page.waitForResponse((response) =>

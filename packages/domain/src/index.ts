@@ -1,4 +1,7 @@
 /* biome-ignore-all lint/performance/noBarrelFile: Domain consumers use this as the stable public API. */
+
+export * from "./convention-rules";
+export * from "./convention-terms";
 export * from "./evaluator";
 export * from "./funbridge";
 export * from "./models";
