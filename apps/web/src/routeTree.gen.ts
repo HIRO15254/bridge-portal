@@ -10,9 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RulesRouteImport } from './routes/rules'
-import { Route as StatisticsRouteImport } from './routes/statistics'
-import { Route as SystemsRouteImport } from './routes/systems'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
 import { Route as BoardsBoardIdRouteImport } from './routes/boards.$boardId'
 import { Route as TournamentsTournamentIdRouteImport } from './routes/tournaments_.$tournamentId'
@@ -20,21 +17,6 @@ import { Route as TournamentsTournamentIdRouteImport } from './routes/tournament
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RulesRoute = RulesRouteImport.update({
-  id: '/rules',
-  path: '/rules',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StatisticsRoute = StatisticsRouteImport.update({
-  id: '/statistics',
-  path: '/statistics',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SystemsRoute = SystemsRouteImport.update({
-  id: '/systems',
-  path: '/systems',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TournamentsRoute = TournamentsRouteImport.update({
@@ -55,18 +37,12 @@ const TournamentsTournamentIdRoute = TournamentsTournamentIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/rules': typeof RulesRoute
-  '/statistics': typeof StatisticsRoute
-  '/systems': typeof SystemsRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/rules': typeof RulesRoute
-  '/statistics': typeof StatisticsRoute
-  '/systems': typeof SystemsRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRoute
@@ -74,9 +50,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/rules': typeof RulesRoute
-  '/statistics': typeof StatisticsRoute
-  '/systems': typeof SystemsRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments_/$tournamentId': typeof TournamentsTournamentIdRoute
@@ -84,28 +57,12 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/rules'
-    | '/statistics'
-    | '/systems'
-    | '/tournaments'
-    | '/boards/$boardId'
-    | '/tournaments/$tournamentId'
+    '/' | '/tournaments' | '/boards/$boardId' | '/tournaments/$tournamentId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/rules'
-    | '/statistics'
-    | '/systems'
-    | '/tournaments'
-    | '/boards/$boardId'
-    | '/tournaments/$tournamentId'
+  to: '/' | '/tournaments' | '/boards/$boardId' | '/tournaments/$tournamentId'
   id:
     | '__root__'
     | '/'
-    | '/rules'
-    | '/statistics'
-    | '/systems'
     | '/tournaments'
     | '/boards/$boardId'
     | '/tournaments_/$tournamentId'
@@ -113,9 +70,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  RulesRoute: typeof RulesRoute
-  StatisticsRoute: typeof StatisticsRoute
-  SystemsRoute: typeof SystemsRoute
   TournamentsRoute: typeof TournamentsRoute
   BoardsBoardIdRoute: typeof BoardsBoardIdRoute
   TournamentsTournamentIdRoute: typeof TournamentsTournamentIdRoute
@@ -128,27 +82,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rules': {
-      id: '/rules'
-      path: '/rules'
-      fullPath: '/rules'
-      preLoaderRoute: typeof RulesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/statistics': {
-      id: '/statistics'
-      path: '/statistics'
-      fullPath: '/statistics'
-      preLoaderRoute: typeof StatisticsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/systems': {
-      id: '/systems'
-      path: '/systems'
-      fullPath: '/systems'
-      preLoaderRoute: typeof SystemsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tournaments': {
@@ -177,9 +110,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  RulesRoute: RulesRoute,
-  StatisticsRoute: StatisticsRoute,
-  SystemsRoute: SystemsRoute,
   TournamentsRoute: TournamentsRoute,
   BoardsBoardIdRoute: BoardsBoardIdRoute,
   TournamentsTournamentIdRoute: TournamentsTournamentIdRoute,

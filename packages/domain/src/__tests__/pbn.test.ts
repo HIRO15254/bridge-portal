@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dealToPbn, parseFunbridgeJson } from "../funbridge";
+import { dealToPbn, parseFunbridgeTournamentJson } from "../funbridge";
 import {
 	contractResultToTricks,
 	createDoubleDummyPbnTags,
@@ -76,7 +76,7 @@ describe("PBN profile", () => {
 	});
 
 	it("round-trips a complete play when successive trick leaders change", () => {
-		const imported = parseFunbridgeJson(
+		const imported = parseFunbridgeTournamentJson(
 			JSON.stringify(capturedBpCircuitFixture)
 		);
 		const board = imported.boards[0];

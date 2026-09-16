@@ -31,7 +31,6 @@
     "cf:typegen": "bunx wrangler types apps/server/worker-configuration.d.ts -c apps/server/wrangler.jsonc",
     "cf:typegen:check": "bunx wrangler types apps/server/worker-configuration.d.ts --check -c apps/server/wrangler.jsonc",
     "test": "vitest run",
-    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "test:ci": "vitest run --reporter=verbose",
     "test:coverage": "vitest run --coverage",
@@ -43,7 +42,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
-    "@playwright/test": "^1.63.0",
     "@types/bun": "catalog:",
     "@vitest/coverage-istanbul": "4.1.2",
     "ajv": "8.18.0",

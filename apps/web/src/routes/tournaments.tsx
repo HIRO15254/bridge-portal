@@ -10,6 +10,7 @@ export const Route = createFileRoute("/tournaments")({
 
 function TournamentsPage() {
 	const tournaments = useQuery(trpc.tournaments.list.queryOptions());
+	const history = useQuery(trpc.history.list.queryOptions());
 	const [message, setMessage] = useState("");
 	const [busy, setBusy] = useState(false);
 	async function upload(event: FormEvent<HTMLFormElement>) {
@@ -30,11 +31,15 @@ function TournamentsPage() {
 				error?: string;
 				duplicate?: boolean;
 				warnings?: string[];
+				kind?: "HISTORY_INDEX";
+				rowCount?: number;
 			};
 			if (!response.ok) {
 				setMessage(`取込に失敗しました: ${result.error ?? response.status}`);
 			} else if (result.duplicate) {
 				setMessage("同じFunbridge JSONはすでに取り込み済みです。");
+			} else if (result.kind === "HISTORY_INDEX") {
+				setMessage(`履歴索引を取り込みました（${result.rowCount ?? 0}大会）。`);
 			} else {
 				const warning = result.warnings?.length
 					? `（確認: ${result.warnings.join(", ")}）`
@@ -59,14 +64,20 @@ function TournamentsPage() {
 			<div className="page-heading">
 				<div>
 					<p className="eyebrow">TOURNAMENTS</p>
-					<h1>Funbridgeの実戦を取り込む。</h1>
-					<p>Funbridge JSONから、局・Auction・Play・成績を保存します。</p>
+					<h1>Funbridge履歴を取り込む。</h1>
+					<p>
+						大会詳細と履歴索引 JSON
+						から、局・Auction・Play・成績・取得範囲を保存します。
+					</p>
 				</div>
 			</div>
 			<form className="upload-panel" onSubmit={upload}>
 				<div>
 					<strong>Funbridge JSONファイル</strong>
-					<p>最大10 MiB。完全／不完全なAuction・Playのどちらも受け付けます。</p>
+					<p>
+						最大10 MiB。FUNBRIDGE_EXPORT v1 と FUNBRIDGE_HISTORY_INDEX v1
+						に対応しています。
+					</p>
 					<a download href="/funbridge-import-example.json">
 						取込フォーマット例をダウンロード
 					</a>
@@ -80,18 +91,8 @@ function TournamentsPage() {
 					/>
 					<span>ファイルを選ぶ</span>
 				</label>
-				<label>
-					本人席（自動判定できない場合）
-					<select defaultValue="" name="heroSeat">
-						<option value="">JSONから自動判定</option>
-						<option>N</option>
-						<option>E</option>
-						<option>S</option>
-						<option>W</option>
-					</select>
-				</label>
 				<button className="primary" disabled={busy} type="submit">
-					{busy ? "解析中…" : "取込・自動評価"}
+					{busy ? "解析中…" : "取り込む"}
 				</button>
 			</form>
 			{message && (
@@ -127,6 +128,42 @@ function TournamentsPage() {
 						</div>
 					))}
 				</div>
+			</section>
+			<section className="panel table-panel">
+				<div className="panel-title">
+					<h2>履歴索引</h2>
+					<span>
+						{history.data?.reduce(
+							(total, item) => total + item.entries.length,
+							0
+						) ?? 0}
+						件
+					</span>
+				</div>
+				{history.data?.map((index) => (
+					<div className="history-index" key={index.id}>
+						<p>
+							<strong>{index.family}</strong> · {index.coverage.scope} ·{" "}
+							{index.coverage.rowCount} / {index.coverage.totalCount} 件 ·{" "}
+							{new Date(index.capturedAt).toLocaleDateString("ja-JP")}
+						</p>
+						<div className="table">
+							{index.entries.map((entry) => (
+								<div className="table-row" key={entry.id}>
+									<strong>{entry.title}</strong>
+									<span>
+										{entry.score ?? "—"} {entry.scoreType ?? ""}
+									</span>
+									<span>
+										{entry.rank ?? "—"} / {entry.registeredPlayerCount}
+									</span>
+									<span>{entry.inProgress ? "進行中" : "完了"}</span>
+								</div>
+							))}
+						</div>
+					</div>
+				))}
+				{history.data?.length === 0 && <p>履歴索引はまだありません。</p>}
 			</section>
 		</main>
 	);

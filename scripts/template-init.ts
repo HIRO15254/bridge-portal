@@ -26,7 +26,6 @@ const IGNORED_SEGMENTS = new Set([
 	"coverage",
 	"dist",
 	"node_modules",
-	"playwright-report",
 	"test-results",
 ]);
 

@@ -8,11 +8,10 @@ import {
 	createDb,
 	deal,
 	doubleDummyResult,
-	evaluationRun,
+	historyIndex,
+	historyIndexEntry,
 	importRevision,
 	playAction,
-	ruleEvaluation,
-	systemVersion,
 	tournament,
 	tournamentRevision,
 	user,
@@ -21,15 +20,10 @@ import {
 	contractResultToTricks,
 	createDoubleDummyPbnTags,
 	dealToPbn,
-	evaluateBoard,
 	exportPbn,
-	JCBL_RULESET_VERSION,
-	normalizeSystemSettings,
 	type PbnGame,
 	parseFunbridgeJson,
-	RULE_ENGINE_VERSION,
 	type Seat,
-	type SystemSnapshot,
 } from "@bridge-portal/domain";
 import { createServerEnv } from "@bridge-portal/env/server";
 import { trpcServer } from "@hono/trpc-server";
@@ -40,7 +34,6 @@ import { cors } from "hono/cors";
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const seats = ["N", "E", "S", "W"] as const;
 const bearerPattern = /^Bearer\s+/i;
-const seatTagNames = { N: "North", E: "East", S: "South", W: "West" } as const;
 
 function secret(env: Env, name: string): string | undefined {
 	const value = Reflect.get(env, name);
@@ -219,26 +212,77 @@ app.post("/api/imports/funbridge-json", async (context) => {
 			400
 		);
 	}
+	if (parsed.kind === "HISTORY_INDEX") {
+		const importId = crypto.randomUUID();
+		const indexId = crypto.randomUUID();
+		const r2Key = `${session.user.id}/history-index/${parsed.family}/${hash}.json`;
+		try {
+			await context.env.RAW_IMPORTS.put(r2Key, bytes, {
+				httpMetadata: { contentType: "application/json" },
+				customMetadata: { sha256: hash, source: "funbridge-history-index" },
+			});
+			await db.insert(importRevision).values({
+				id: importId,
+				userId: session.user.id,
+				sha256: hash,
+				r2Key,
+				status: "PENDING",
+				warnings: [],
+			});
+			await db.insert(historyIndex).values({
+				id: indexId,
+				importRevisionId: importId,
+				userId: session.user.id,
+				family: parsed.family,
+				capturedAt: parsed.capturedAt,
+				captureMode: parsed.captureMode,
+				locale: parsed.locale,
+				coverage: parsed.coverage,
+			});
+			if (parsed.tournaments.length) {
+				await db.insert(historyIndexEntry).values(
+					parsed.tournaments.map((entry) => ({
+						id: crypto.randomUUID(),
+						historyIndexId: indexId,
+						sourceTournamentId: entry.sourceTournamentId,
+						title: entry.title,
+						playedAt:
+							(entry.startDate ?? entry.lastPlayedAt)
+								? new Date(entry.startDate ?? entry.lastPlayedAt ?? "")
+								: null,
+						registeredPlayerCount: entry.registeredPlayerCount,
+						inProgress: entry.inProgress,
+						rank: entry.rank ?? null,
+						score: entry.score ?? null,
+						scoreType: entry.scoreType ?? null,
+						boardCount: entry.boardCount ?? null,
+						playedBoardCount: entry.playedBoardCount ?? null,
+						metadata: entry,
+					}))
+				);
+			}
+			await db
+				.update(importRevision)
+				.set({ status: "ACTIVE" })
+				.where(eq(importRevision.id, importId));
+			return context.json(
+				{
+					duplicate: false,
+					importRevisionId: importId,
+					kind: "HISTORY_INDEX",
+					rowCount: parsed.tournaments.length,
+				},
+				201
+			);
+		} catch (error) {
+			await db.delete(historyIndex).where(eq(historyIndex.id, indexId));
+			await db.delete(importRevision).where(eq(importRevision.id, importId));
+			await context.env.RAW_IMPORTS.delete(r2Key);
+			throw error;
+		}
+	}
 	const family = parsed.family;
 	const externalId = parsed.externalId;
-	const importingUser = await db.query.user.findFirst({
-		where: eq(user.id, session.user.id),
-	});
-	if (
-		importingUser?.funbridgeId &&
-		importingUser.funbridgeId !== parsed.funbridgeId
-	) {
-		return context.json(
-			{
-				error: "FUNBRIDGE_ID_MISMATCH",
-				message: "登録済みのFunbridge IDとJSON内のIDが一致しません。",
-			},
-			409
-		);
-	}
-	const shouldAssignFunbridgeId = Boolean(
-		importingUser && !importingUser.funbridgeId
-	);
 	const current = await db.query.tournament.findFirst({
 		where: and(
 			eq(tournament.userId, session.user.id),
@@ -284,12 +328,6 @@ app.post("/api/imports/funbridge-json", async (context) => {
 			httpMetadata: { contentType: "application/json" },
 			customMetadata: { sha256: hash, source: "funbridge" },
 		});
-		if (shouldAssignFunbridgeId) {
-			await db
-				.update(user)
-				.set({ funbridgeId: parsed.funbridgeId })
-				.where(eq(user.id, session.user.id));
-		}
 		await db.insert(importRevision).values({
 			id: importId,
 			userId: session.user.id,
@@ -314,20 +352,6 @@ app.post("/api/imports/funbridge-json", async (context) => {
 			familyMetadata: parsed.familyMetadata,
 		});
 
-		const assignedVersion = current?.defaultSystemVersionId
-			? await db.query.systemVersion.findFirst({
-					where: eq(systemVersion.id, current.defaultSystemVersionId),
-				})
-			: undefined;
-		const system: SystemSnapshot | undefined = assignedVersion
-			? {
-					name: assignedVersion.name,
-					rulesetVersion: assignedVersion.rulesetVersion,
-					adoptedOfficialItemIds: assignedVersion.adoptedOfficialItemIds,
-					selectedVariants: assignedVersion.selectedVariants,
-					settings: normalizeSystemSettings(assignedVersion.settings),
-				}
-			: undefined;
 		for (const game of parsed.boards) {
 			const bridgeDeal = game.deal;
 			const pbnDeal = dealToPbn(bridgeDeal);
@@ -369,8 +393,12 @@ app.post("/api/imports/funbridge-json", async (context) => {
 				heroSeat,
 				contract: bridgeDeal.contract,
 				declarer: bridgeDeal.declarer,
+				historyMetadata: {
+					comparison: game.comparison,
+					source: game.source,
+				},
 				result: bridgeDeal.result,
-				systemVersionId: assignedVersion?.id,
+				sourceStatus: game.status ?? null,
 			});
 			if (game.auction?.length) {
 				await db.insert(auctionCall).values(
@@ -404,33 +432,6 @@ app.post("/api/imports/funbridge-json", async (context) => {
 				contractMade:
 					bridgeDeal.result === undefined ? null : bridgeDeal.result >= 0,
 			});
-			const runId = crypto.randomUUID();
-			await db.insert(evaluationRun).values({
-				id: runId,
-				boardAttemptId: boardId,
-				rulesetVersion: JCBL_RULESET_VERSION,
-				ruleEngineVersion: RULE_ENGINE_VERSION,
-				systemVersionId: assignedVersion?.id,
-				completedAt: new Date(),
-			});
-			const evaluations = evaluateBoard({
-				auction: game.auction,
-				deal: bridgeDeal,
-				heroSeat,
-				playComplete: game.playComplete,
-				play: game.play,
-				system,
-			});
-			const evaluationRows = evaluations.map((evaluation) => ({
-				id: crypto.randomUUID(),
-				evaluationRunId: runId,
-				...evaluation,
-			}));
-			for (let offset = 0; offset < evaluationRows.length; offset += 10) {
-				await db
-					.insert(ruleEvaluation)
-					.values(evaluationRows.slice(offset, offset + 10));
-			}
 		}
 		await db
 			.update(tournament)
@@ -462,12 +463,6 @@ app.post("/api/imports/funbridge-json", async (context) => {
 		if (createdTournament) {
 			await db.delete(tournament).where(eq(tournament.id, tournamentId));
 		}
-		if (shouldAssignFunbridgeId) {
-			await db
-				.update(user)
-				.set({ funbridgeId: null })
-				.where(eq(user.id, session.user.id));
-		}
 		await context.env.RAW_IMPORTS.delete(r2Key);
 		throw error;
 	}
@@ -489,7 +484,6 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 			deal: true,
 			playActions: true,
 			score: true,
-			systemVersion: true,
 			tournamentRevision: { with: { tournament: true } },
 		},
 	});
@@ -501,13 +495,7 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 		where: eq(doubleDummyResult.boardAttemptId, board.id),
 		orderBy: [desc(doubleDummyResult.createdAt), desc(sql`rowid`)],
 	});
-	const player = await db.query.user.findFirst({
-		where: eq(user.id, session.user.id),
-	});
 	const nameTags = { North: "?", East: "?", South: "?", West: "?" };
-	if (board.heroSeat && player?.funbridgeId) {
-		nameTags[seatTagNames[board.heroSeat]] = player.funbridgeId;
-	}
 	const orderedAuction = [...board.auctionCalls].sort(
 		(left, right) => left.callIndex - right.callIndex
 	);
@@ -556,7 +544,6 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 			Result: contractResultToTricks(board.contract, board.result),
 			FunbridgeTournamentId: tournamentItem.externalId,
 			FunbridgeTournamentFamily: tournamentItem.family,
-			FunbridgePlayerId: player?.funbridgeId ?? "?",
 			FunbridgePlayedAt:
 				board.tournamentRevision.playedAt?.toISOString() ?? "?",
 			FunbridgeCompletion: board.tournamentRevision.completion,
@@ -574,9 +561,6 @@ app.get("/api/boards/:id/export.pbn", async (context) => {
 					? "?"
 					: String(board.tournamentRevision.participantCount),
 			...familyTags,
-			System: board.systemVersion
-				? `${board.systemVersion.name} v${board.systemVersion.versionNumber}`
-				: "?",
 			Play: orderedPlay[0]?.seat ?? "?",
 			...(doubleDummy ? createDoubleDummyPbnTags(doubleDummy) : {}),
 		},

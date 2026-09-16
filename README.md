@@ -1,16 +1,10 @@
 # Bridge Portal
 
-Funbridgeの実戦と2026年5月1日施行のJCBL「リストA」を結ぶ、単一ユーザー向け学習ポータルです。
+Funbridge tournament and board history browser for one user.
 
-## MVP workflow
+## History browsing
 
-1. `Rules`でリストAの全22大項目を学ぶ
-2. `My Systems`でRule・Variant・Natural call設定を選び、不変のSystem Versionを公開する
-3. 外部取得済みのFunbridge JSONを取り込む
-4. 本人のCall／Lead／Signalについて全22評価器を実行する
-5. Board Detailと`Statistics`からルールと実戦を往復する
-
-元のFunbridge JSONはPrivate R2へSHA-256で冪等保存し、D1にはTournament、Revision、Deal、Auction、Play、Score、評価Runを正規化します。同一Tournament IDの更新は新しいRevisionになります。不完全なAuction／Playも受け付け、客観的に判断できない評価は理由付き`INDETERMINATE`になります。DDSはブラウザーのWeb Workerでオンデマンド実行します。Board DetailからDeal、Auction、Play、Result、System、Double Dummy結果を含むPBN 2.1をエクスポートできます。
+The portal accepts the skill-defined tournament-detail and history-index JSON files. Original JSON is immutable in private R2; D1 stores tournament revisions, deals, auction and play actions, scores, and history-index entries. Partial boards remain visible. DDS runs on demand in a browser worker, and board detail can export PBN 2.1 with deal, auction, play, result, and double-dummy data.
 
 ## Development
 
@@ -27,7 +21,6 @@ bun run dev
 bun run check-types
 bun run check
 bun run test
-bun run test:e2e
 bun run check:test-discovery
 bun run build
 ```
@@ -46,9 +39,7 @@ bun run auth:bootstrap
 
 ## Funbridge JSON profile
 
-取込ファイルは`format: "FUNBRIDGE_EXPORT"`、`formatVersion: 1`とし、Tournament、Board、Auction、Playを含むBridge Portal標準の交換プロファイルです。正式なFamilyは`BP_CIRCUIT`、`DAILY`、`SERIES`のみで、それぞれBP、地域、Series期間・昇降格の固有メタデータが必須です。完全な例は[`packages/domain/src/__tests__/fixtures`](./packages/domain/src/__tests__/fixtures)にあります。各手13枚・52枚一意性、action index、trick番号、Playカードの所有席を取込前に検証します。PBN、LIN、USEBIOからのインポートはMVP対象外です。
-
-このプロファイルはFunbridge社が公開する公式エクスポート仕様ではありません。外部取得処理は取得データをこの形へ変換して出力する前提です。3 Familyの基本fixtureは仕様準拠の合成データです。加えて、Web版の読取専用リプレイから取得し、アカウント・大会識別子と大会順位を除去したBP Circuit、Daily、Series fixtureで、完全な52アクションと途中終了したPlayの双方を継続検証します。
+The supported files are `FUNBRIDGE_EXPORT` v1 tournament details and `FUNBRIDGE_HISTORY_INDEX` v1 history indexes. Their authoritative structure is the [Funbridge export-format documentation](./docs/funbridge-export-format.md) and the JSON Schema shipped with the skill. `BP_CIRCUIT`, `DAILY`, and `SERIES` are supported. Import validates 13 cards per hand, 52 unique cards, action indices, trick numbers, and card ownership. PBN, LIN, and USEBIO imports are out of scope.
 
 ## Deployment
 

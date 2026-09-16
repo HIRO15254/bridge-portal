@@ -1,18 +1,10 @@
 # Bridge Portal
 
-Funbridgeの実戦と、2026年5月1日施行のJCBL「リストA」を結ぶ単一ユーザー向け学習ポータルです。
+Funbridgeの大会・ボード履歴を閲覧する単一ユーザー向けポータルです。
 
-## MVPの学習ループ
+## 履歴閲覧
 
-1. `Rules`でリストAの全22大項目を学ぶ
-2. `My Systems`でRule・Variant・Natural call設定を選び、不変のSystem Versionを公開する
-3. 外部取得済みのFunbridge JSONを取り込む
-4. 本人のCall／Lead／Signalについて全22評価器を実行する
-5. Board Detailと`Statistics`からルールと実戦を往復する
-
-元のFunbridge JSONはPrivate R2へSHA-256で冪等保存し、D1にはTournament、Revision、Deal、Auction、Play、Score、評価Runを正規化します。同じTournament IDの更新は新しいRevisionとして保持します。不完全なAuction／Playも受け付け、客観的に判断できない評価は理由付き`INDETERMINATE`になります。
-
-DDSはブラウザーのWeb Workerでオンデマンド実行します。Board Detailから、Deal、Auction、Play、Result、System、Double Dummy結果を含むPBN 2.1をエクスポートできます。
+スキル出力の大会詳細・履歴索引 JSON をPrivate R2へSHA-256で不変保存し、D1には大会、配札、Auction、Play、Score と履歴索引を正規化します。大会詳細は同じ大会IDごとにRevisionとして保持し、`partialBoards` もボード一覧から確認できます。DDSはブラウザーのWeb Workerでオンデマンド実行し、Board DetailからDeal、Auction、Play、Result、Double Dummy結果を含むPBN 2.1をエクスポートできます。
 
 ## 技術構成
 
@@ -20,7 +12,7 @@ DDSはブラウザーのWeb Workerでオンデマンド実行します。Board D
 - Cloudflare Workers、Hono、tRPC
 - Drizzle ORM、Cloudflare D1、Private R2
 - Better Authによる単一ユーザー認証
-- Bun workspace、Vitest、Playwright
+- Bun workspace、Vitest
 
 詳しいpackage境界とコマンドは[`AGENTS.md`](./AGENTS.md)を参照してください。
 
@@ -39,7 +31,6 @@ bun run dev
 bun run check-types
 bun run check
 bun run test
-bun run test:e2e
 bun run check:test-discovery
 bun run build
 ```
@@ -58,11 +49,7 @@ bun run auth:bootstrap
 
 ## Funbridge JSONプロファイル
 
-取込ファイルは`format: "FUNBRIDGE_EXPORT"`、`formatVersion: 1`とし、Tournament、Board、Auction、Playを含むBridge Portal標準の交換プロファイルです。正式なFamilyは`BP_CIRCUIT`、`DAILY`、`SERIES`のみです。それぞれBP、地域、Series期間・昇降格の固有メタデータを検証します。
-
-完全な例は[`packages/domain/src/__tests__/fixtures`](./packages/domain/src/__tests__/fixtures)にあります。各手13枚・52枚一意性、action index、trick番号、Playカードの所有席と合法な順序を取込前に検証します。PBN、LIN、USEBIOからのインポートはMVP対象外です。
-
-このプロファイルはFunbridge社が公開する公式エクスポート仕様ではありません。外部取得処理が取得データをこの形へ変換して出力する前提です。テストでは合成fixtureに加え、Web版の読取専用リプレイから取得後に識別情報を除去した3 Familyのfixtureも検証します。
+取込対象はスキルで定義された`FUNBRIDGE_EXPORT` v1（大会詳細）と`FUNBRIDGE_HISTORY_INDEX` v1（履歴一覧）です。構造の正本は[Funbridge履歴エクスポート形式](./docs/funbridge-export-format.md)とスキル同梱のJSON Schemaです。`BP_CIRCUIT`、`DAILY`、`SERIES`の3 Familyに対応し、各手13枚・52枚一意性、action index、trick番号、Playカードの所有席を取り込み時に検証します。PBN、LIN、USEBIOからのインポートは対象外です。
 
 ## デプロイ
 

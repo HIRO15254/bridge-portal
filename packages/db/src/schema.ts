@@ -199,6 +199,63 @@ export const importRevision = sqliteTable(
 		uniqueIndex("import_revision_hash_uq").on(table.userId, table.sha256),
 	]
 );
+export const historyIndex = sqliteTable(
+	"history_index",
+	{
+		id: text("id").primaryKey(),
+		importRevisionId: text("import_revision_id")
+			.notNull()
+			.references(() => importRevision.id, { onDelete: "cascade" })
+			.unique(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		family: text("family", {
+			enum: ["BP_CIRCUIT", "DAILY", "SERIES"],
+		}).notNull(),
+		capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
+		captureMode: text("capture_mode").notNull(),
+		locale: text("locale").notNull(),
+		coverage: text("coverage", { mode: "json" })
+			.$type<{
+				rowCount: number;
+				scope: "NONE" | "VISIBLE_WINDOW" | "FULL";
+				totalCount: number;
+			}>()
+			.notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.default(sql`(unixepoch())`)
+			.notNull(),
+	},
+	(table) => [
+		index("history_index_user_family_idx").on(table.userId, table.family),
+	]
+);
+export const historyIndexEntry = sqliteTable(
+	"history_index_entry",
+	{
+		id: text("id").primaryKey(),
+		historyIndexId: text("history_index_id")
+			.notNull()
+			.references(() => historyIndex.id, { onDelete: "cascade" }),
+		sourceTournamentId: text("source_tournament_id").notNull(),
+		title: text("title").notNull(),
+		playedAt: integer("played_at", { mode: "timestamp" }),
+		registeredPlayerCount: integer("registered_player_count").notNull(),
+		inProgress: integer("in_progress", { mode: "boolean" }).notNull(),
+		rank: integer("rank"),
+		score: real("score"),
+		scoreType: text("score_type", { enum: ["MP", "IMP"] }),
+		boardCount: integer("board_count"),
+		playedBoardCount: integer("played_board_count"),
+		metadata: text("metadata", { mode: "json" })
+			.$type<Record<string, unknown>>()
+			.notNull(),
+	},
+	(table) => [
+		index("history_index_entry_source_idx").on(table.sourceTournamentId),
+	]
+);
 export const tournamentRevision = sqliteTable(
 	"tournament_revision",
 	{
@@ -259,6 +316,16 @@ export const boardAttempt = sqliteTable(
 		contract: text("contract"),
 		declarer: text("declarer", { enum: ["N", "E", "S", "W"] }),
 		result: integer("result"),
+		historyMetadata: text("history_metadata", { mode: "json" })
+			.$type<{
+				comparison?: Record<string, unknown>;
+				source?: Record<string, unknown>;
+			}>()
+			.notNull()
+			.default(sql`'{}'`),
+		sourceStatus: text("source_status", {
+			enum: ["NO_CONTRACT_OR_PLAY", "NO_PLAY", "PASSED_OUT"],
+		}),
 		systemVersionId: text("system_version_id").references(
 			() => systemVersion.id,
 			{ onDelete: "set null" }
@@ -411,7 +478,28 @@ export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
 	systems: many(bridgeSystem),
 	tournaments: many(tournament),
+	historyIndexes: many(historyIndex),
 }));
+export const historyIndexRelations = relations(
+	historyIndex,
+	({ one, many }) => ({
+		importRevision: one(importRevision, {
+			fields: [historyIndex.importRevisionId],
+			references: [importRevision.id],
+		}),
+		user: one(user, { fields: [historyIndex.userId], references: [user.id] }),
+		entries: many(historyIndexEntry),
+	})
+);
+export const historyIndexEntryRelations = relations(
+	historyIndexEntry,
+	({ one }) => ({
+		historyIndex: one(historyIndex, {
+			fields: [historyIndexEntry.historyIndexId],
+			references: [historyIndex.id],
+		}),
+	})
+);
 export const systemRelations = relations(bridgeSystem, ({ one, many }) => ({
 	user: one(user, { fields: [bridgeSystem.userId], references: [user.id] }),
 	draft: one(systemDraft),
@@ -528,6 +616,10 @@ export const schema = {
 	evaluationRun,
 	evaluationRunRelations,
 	importRevision,
+	historyIndex,
+	historyIndexEntry,
+	historyIndexEntryRelations,
+	historyIndexRelations,
 	playAction,
 	playActionRelations,
 	ruleEvaluation,
