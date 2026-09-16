@@ -28,7 +28,6 @@ const auctionCallSchema = z.object({
 	index: z.number().int().min(0),
 	seat: seatSchema,
 });
-
 const playActionSchema = z.object({
 	card: z
 		.string()
@@ -38,102 +37,182 @@ const playActionSchema = z.object({
 	seat: seatSchema,
 	trickNumber: z.number().int().min(1).max(13),
 });
-
-const boardSchema = z.object({
-	auction: z.array(auctionCallSchema).max(128).optional(),
-	boardNumber: z.number().int().min(1),
-	contract: z.string().trim().min(1).max(16).optional(),
-	dealer: seatSchema,
-	declarer: seatSchema.optional(),
-	hands: z.object({
-		E: handSchema,
-		N: handSchema,
-		S: handSchema,
-		W: handSchema,
-	}),
-	heroSeat: seatSchema.optional(),
-	play: z.array(playActionSchema).max(52).optional(),
-	result: z.number().int().min(-13).max(13).optional(),
-	score: z.number().optional(),
-	vulnerability: vulnerabilitySchema,
+const handsSchema = z.object({
+	E: handSchema,
+	N: handSchema,
+	S: handSchema,
+	W: handSchema,
 });
 
-const bpMetadataSchema = z.object({
-	awarded: z.number().min(0).optional(),
-	eventType: z.string().trim().min(1).optional(),
-	level: z.string().trim().min(1),
-	multiplier: z.number().positive().optional(),
-});
-
-const dailyMetadataSchema = z.object({
-	region: z.string().trim().min(1),
-});
-
-const seriesMetadataSchema = z.object({
-	level: z.string().trim().min(1),
-	outcome: z.enum(["PROMOTED", "MAINTAINED", "RELEGATED", "PENDING"]),
-	period: z.string().trim().min(1),
-});
-
-const tournamentSchema = z
+const skillTournamentSchema = z
 	.object({
 		boardCount: z.number().int().min(0),
-		bpCircuit: bpMetadataSchema.optional(),
+		bpCircuit: z
+			.object({ level: z.string().min(1) })
+			.passthrough()
+			.optional(),
 		completion: completionSchema,
-		daily: dailyMetadataSchema.optional(),
+		daily: z
+			.object({ region: z.string().min(1) })
+			.passthrough()
+			.optional(),
 		family: familySchema,
-		funbridgeId: z.string().trim().min(1).max(128),
-		id: z.string().trim().min(1).max(256),
-		name: z.string().trim().min(1).max(200),
+		funbridgeId: z.string().min(1),
+		id: z.string().min(1),
+		name: z.string().min(1),
 		participantCount: z.number().int().min(1).optional(),
 		playedAt: z.string().datetime({ offset: true }),
 		rank: z.number().int().min(1).optional(),
 		score: z.number().optional(),
 		scoreType: scoreTypeSchema,
-		series: seriesMetadataSchema.optional(),
+		series: z
+			.object({
+				level: z.string().min(1),
+				outcome: z.enum(["PROMOTED", "MAINTAINED", "RELEGATED", "PENDING"]),
+				period: z.string().min(1),
+			})
+			.passthrough()
+			.optional(),
 	})
-	.superRefine((tournament, context) => {
-		if (tournament.family === "BP_CIRCUIT" && !tournament.bpCircuit) {
+	.passthrough()
+	.superRefine((value, context) => {
+		if (value.family === "BP_CIRCUIT" && !value.bpCircuit) {
 			context.addIssue({
 				code: "custom",
 				message: "BP_CIRCUIT requires tournament.bpCircuit metadata",
-				path: ["bpCircuit"],
 			});
 		}
-		if (tournament.family === "DAILY" && !tournament.daily) {
+		if (value.family === "DAILY" && !value.daily) {
 			context.addIssue({
 				code: "custom",
 				message: "DAILY requires tournament.daily metadata",
-				path: ["daily"],
 			});
 		}
-		if (tournament.family === "SERIES" && !tournament.series) {
+		if (value.family === "SERIES" && !value.series) {
 			context.addIssue({
 				code: "custom",
 				message: "SERIES requires tournament.series metadata",
-				path: ["series"],
 			});
 		}
 	});
-
-export const funbridgeJsonSchema = z.object({
-	boards: z.array(boardSchema).min(1).max(128),
+const skillBoardSchema = z
+	.object({
+		auction: z.array(auctionCallSchema).max(128).optional(),
+		boardNumber: z.number().int().min(1),
+		comparison: z.object({}).passthrough().optional(),
+		contract: z.string().trim().min(1).max(16).optional(),
+		dealer: seatSchema,
+		declarer: seatSchema.optional(),
+		hands: handsSchema,
+		heroSeat: seatSchema.optional(),
+		play: z.array(playActionSchema).max(52).optional(),
+		result: z.number().int().min(-13).max(13).optional(),
+		score: z.number().optional(),
+		source: z
+			.object({ sourceDealId: z.string().min(1) })
+			.passthrough()
+			.optional(),
+		vulnerability: vulnerabilitySchema,
+	})
+	.passthrough();
+const partialBoardSchema = z
+	.object({
+		auction: z.array(auctionCallSchema).max(128).optional(),
+		boardNumber: z.number().int().min(1),
+		comparison: z.object({}).passthrough().optional(),
+		contract: z.string().trim().min(1).max(16).optional(),
+		dealer: seatSchema,
+		declarer: seatSchema.optional(),
+		hands: handsSchema,
+		play: z.array(playActionSchema).max(52).optional(),
+		result: z.number().int().min(-13).max(13).optional(),
+		score: z.number().optional(),
+		source: z.object({ sourceDealId: z.string().min(1) }).passthrough(),
+		status: z.enum(["NO_CONTRACT_OR_PLAY", "NO_PLAY", "PASSED_OUT"]),
+		vulnerability: vulnerabilitySchema,
+	})
+	.passthrough();
+const skillExportSchema = z
+	.object({
+		boards: z.array(skillBoardSchema).max(128),
+		exportedAt: z.string().datetime({ offset: true }),
+		format: z.literal("FUNBRIDGE_EXPORT"),
+		formatVersion: z.literal(1),
+		partialBoards: z.array(partialBoardSchema).max(128).optional(),
+		source: z
+			.object({
+				capturedAt: z.string().datetime({ offset: true }),
+				captureMode: z.enum(["NETWORK_RESPONSE", "MIXED", "SPA_UI"]),
+				locale: z.string().min(2),
+				platform: z.literal("FUNBRIDGE_WEB"),
+				sourceTournamentId: z.string().min(1),
+				warnings: z.array(z.string().min(1)).optional(),
+			})
+			.passthrough(),
+		standingsCoverage: z
+			.object({
+				rowCount: z.number().int().min(0),
+				scope: z.enum(["NONE", "VISIBLE_WINDOW", "FULL"]),
+				totalCount: z.number().int().min(0),
+			})
+			.passthrough(),
+		tournament: skillTournamentSchema,
+	})
+	.passthrough();
+const historyRowSchema = z
+	.object({
+		sourceTournamentId: z.string().min(1),
+		title: z.string().min(1),
+		registeredPlayerCount: z.number().int().min(0),
+		inProgress: z.boolean(),
+		startDate: z.string().datetime({ offset: true }).optional(),
+		lastPlayedAt: z.string().datetime({ offset: true }).optional(),
+		rank: z.number().int().min(1).optional(),
+		score: z.number().optional(),
+		scoreType: scoreTypeSchema.optional(),
+		boardCount: z.number().int().min(1).optional(),
+		playedBoardCount: z.number().int().min(0).optional(),
+	})
+	.passthrough();
+export const funbridgeHistoryIndexSchema = z
+	.object({
+		capturedAt: z.string().datetime({ offset: true }),
+		coverage: z.object({
+			rowCount: z.number().int().min(0),
+			scope: z.enum(["NONE", "VISIBLE_WINDOW", "FULL"]),
+			totalCount: z.number().int().min(0),
+		}),
+		family: familySchema,
+		format: z.literal("FUNBRIDGE_HISTORY_INDEX"),
+		formatVersion: z.literal(1),
+		source: z.object({
+			captureMode: z.enum(["NETWORK_RESPONSE", "MIXED", "SPA_UI"]),
+			locale: z.string().min(2),
+			platform: z.literal("FUNBRIDGE_WEB"),
+		}),
+		tournaments: z.array(historyRowSchema),
+	})
+	.passthrough();
+const legacyExportSchema = z.object({
+	boards: z.array(skillBoardSchema).min(1).max(128),
 	format: z.literal("FUNBRIDGE_EXPORT"),
 	formatVersion: z.literal(1),
-	tournament: tournamentSchema,
+	tournament: skillTournamentSchema,
 });
-
-export type FunbridgeJsonFile = z.infer<typeof funbridgeJsonSchema>;
+export const funbridgeJsonSchema = skillExportSchema.or(legacyExportSchema);
+export type FunbridgeJsonFile = z.infer<typeof skillExportSchema>;
 
 export interface NormalizedFunbridgeBoard {
 	auction?: AuctionCall[];
+	comparison?: Record<string, unknown>;
 	deal: BridgeDeal;
 	heroSeat?: (typeof seats)[number];
 	play?: PlayAction[];
 	playComplete: boolean;
 	score?: number;
+	source?: Record<string, unknown>;
+	status?: "NO_CONTRACT_OR_PLAY" | "NO_PLAY" | "PASSED_OUT";
 }
-
 export interface NormalizedFunbridgeImport {
 	boards: NormalizedFunbridgeBoard[];
 	completion: FunbridgeJsonFile["tournament"]["completion"];
@@ -141,7 +220,7 @@ export interface NormalizedFunbridgeImport {
 	externalId: string;
 	family: TournamentFamily;
 	familyMetadata: Record<string, string | number | null>;
-	funbridgeId: string;
+	kind: "TOURNAMENT";
 	name: string;
 	participantCount?: number;
 	playedAt: Date;
@@ -150,43 +229,61 @@ export interface NormalizedFunbridgeImport {
 	scoreType: "MP" | "IMP";
 	warnings: string[];
 }
+export type NormalizedHistoryIndex = Omit<
+	Partial<NormalizedFunbridgeImport>,
+	"kind"
+> & {
+	capturedAt: Date;
+	coverage: {
+		rowCount: number;
+		scope: "NONE" | "VISIBLE_WINDOW" | "FULL";
+		totalCount: number;
+	};
+	family: TournamentFamily;
+	kind: "HISTORY_INDEX";
+	locale: string;
+	captureMode: "NETWORK_RESPONSE" | "MIXED" | "SPA_UI";
+	tournaments: z.infer<typeof historyRowSchema>[];
+};
+export type NormalizedFunbridgeFile =
+	| NormalizedFunbridgeImport
+	| NormalizedHistoryIndex;
 
 function assertDistinctIndexes(
 	values: { index: number }[] | undefined,
 	path: string
 ): void {
-	if (!values) {
-		return;
-	}
-	const indexes = values.map((value) => value.index);
-	if (new Set(indexes).size !== indexes.length) {
+	if (
+		values &&
+		new Set(values.map((value) => value.index)).size !== values.length
+	) {
 		throw new Error(`${path} contains duplicate indexes`);
 	}
 }
-
+function assertSequentialIndexes(
+	values: { index: number }[] | undefined,
+	path: string
+): void {
+	if (
+		values &&
+		[...values]
+			.sort((a, b) => a.index - b.index)
+			.some((value, index) => value.index !== index)
+	) {
+		throw new Error(`${path} indexes must be contiguous from zero`);
+	}
+}
 function cardsInHand(hand: string): string[] {
 	return hand.split(".").flatMap((ranks, suitIndex) => {
 		const suit = suits[suitIndex];
 		return suit ? [...ranks].map((rank) => `${suit}${rank}`) : [];
 	});
 }
-
-function assertSequentialIndexes(
-	values: { index: number }[] | undefined,
-	path: string
-): void {
-	if (!values) {
-		return;
-	}
-	const ordered = [...values].sort((left, right) => left.index - right.index);
-	if (ordered.some((value, index) => value.index !== index)) {
-		throw new Error(`${path} indexes must be contiguous from zero`);
-	}
-}
-
-function assertAuctionSeatOrder(
-	board: FunbridgeJsonFile["boards"][number]
-): void {
+function assertAuctionSeatOrder(board: {
+	auction?: z.infer<typeof auctionCallSchema>[];
+	boardNumber: number;
+	dealer: z.infer<typeof seatSchema>;
+}): void {
 	if (!board.auction) {
 		return;
 	}
@@ -200,10 +297,16 @@ function assertAuctionSeatOrder(
 		}
 	}
 }
-
-function assertValidDealAndPlay(
-	board: FunbridgeJsonFile["boards"][number]
-): void {
+function assertValidDealAndPlay(board: {
+	boardNumber: number;
+	hands: z.infer<typeof handsSchema>;
+	play?: z.infer<typeof playActionSchema>[];
+	dealer: z.infer<typeof seatSchema>;
+	vulnerability: z.infer<typeof vulnerabilitySchema>;
+	contract?: string;
+	declarer?: z.infer<typeof seatSchema>;
+	result?: number;
+}): void {
 	const cardsBySeat = Object.fromEntries(
 		seats.map((seat) => [seat, cardsInHand(board.hands[seat])])
 	) as Record<(typeof seats)[number], string[]>;
@@ -213,7 +316,7 @@ function assertValidDealAndPlay(
 		}
 	}
 	const dealCards = seats.flatMap((seat) => cardsBySeat[seat]);
-	if (dealCards.length !== 52 || new Set(dealCards).size !== 52) {
+	if (new Set(dealCards).size !== 52) {
 		throw new Error(`BOARD_${board.boardNumber}_DEAL_NOT_UNIQUE_52_CARDS`);
 	}
 	if (!board.play) {
@@ -245,85 +348,119 @@ function assertValidDealAndPlay(
 		board.play
 	);
 }
-
+function primitive(value: unknown): string | number | null {
+	return typeof value === "string" || typeof value === "number" ? value : null;
+}
 function familyMetadata(
-	tournament: FunbridgeJsonFile["tournament"]
+	tournament: z.infer<typeof skillTournamentSchema>
 ): Record<string, string | number | null> {
 	if (tournament.family === "BP_CIRCUIT") {
 		return {
-			awarded: tournament.bpCircuit?.awarded ?? null,
-			eventType: tournament.bpCircuit?.eventType ?? null,
-			level: tournament.bpCircuit?.level ?? null,
-			multiplier: tournament.bpCircuit?.multiplier ?? null,
+			awarded: primitive(tournament.bpCircuit?.awarded),
+			eventType: primitive(tournament.bpCircuit?.eventType),
+			level: primitive(tournament.bpCircuit?.level),
+			multiplier: primitive(tournament.bpCircuit?.multiplier),
 		};
 	}
 	if (tournament.family === "DAILY") {
-		return { region: tournament.daily?.region ?? null };
+		return { region: primitive(tournament.daily?.region) };
 	}
 	return {
-		level: tournament.series?.level ?? null,
-		outcome: tournament.series?.outcome ?? null,
-		period: tournament.series?.period ?? null,
+		level: primitive(tournament.series?.level),
+		outcome: primitive(tournament.series?.outcome),
+		period: primitive(tournament.series?.period),
+	};
+}
+function normalizeBoard(
+	board: z.infer<typeof skillBoardSchema> | z.infer<typeof partialBoardSchema>,
+	warnings: string[]
+): NormalizedFunbridgeBoard {
+	assertDistinctIndexes(board.auction, `boards.${board.boardNumber}.auction`);
+	assertDistinctIndexes(board.play, `boards.${board.boardNumber}.play`);
+	assertSequentialIndexes(board.auction, `boards.${board.boardNumber}.auction`);
+	assertSequentialIndexes(board.play, `boards.${board.boardNumber}.play`);
+	assertAuctionSeatOrder(board);
+	assertValidDealAndPlay(board);
+	if (!board.auction) {
+		warnings.push(`BOARD_${board.boardNumber}_AUCTION_MISSING`);
+	}
+	if (!board.play || board.play.length < 52) {
+		warnings.push(`BOARD_${board.boardNumber}_PLAY_INCOMPLETE`);
+	}
+	const heroSeat = seatSchema.safeParse(
+		"heroSeat" in board ? board.heroSeat : undefined
+	);
+	const status = z
+		.enum(["NO_CONTRACT_OR_PLAY", "NO_PLAY", "PASSED_OUT"])
+		.safeParse("status" in board ? board.status : undefined);
+	return {
+		auction: board.auction,
+		comparison: board.comparison,
+		deal: {
+			boardNumber: board.boardNumber,
+			contract: board.contract,
+			dealer: board.dealer,
+			declarer: board.declarer,
+			hands: board.hands,
+			result: board.result,
+			vulnerability: board.vulnerability,
+		},
+		heroSeat: heroSeat.success ? heroSeat.data : undefined,
+		play: board.play,
+		playComplete: board.play?.length === 52,
+		score: board.score,
+		source: board.source,
+		status: status.success ? status.data : undefined,
 	};
 }
 
-export function parseFunbridgeJson(source: string): NormalizedFunbridgeImport {
+export function parseFunbridgeJson(source: string): NormalizedFunbridgeFile {
 	let raw: unknown;
 	try {
 		raw = JSON.parse(source);
 	} catch {
 		throw new Error("INVALID_FUNBRIDGE_JSON");
 	}
-	const parsed = funbridgeJsonSchema.parse(raw);
-	const warnings: string[] = [];
-	if (parsed.tournament.boardCount !== parsed.boards.length) {
-		warnings.push("BOARD_COUNT_MISMATCH");
+	const index = funbridgeHistoryIndexSchema.safeParse(raw);
+	if (index.success) {
+		return {
+			capturedAt: new Date(index.data.capturedAt),
+			captureMode: index.data.source.captureMode,
+			coverage: index.data.coverage,
+			family: index.data.family,
+			kind: "HISTORY_INDEX",
+			locale: index.data.source.locale,
+			tournaments: index.data.tournaments,
+		};
 	}
-	const boardNumbers = parsed.boards.map((board) => board.boardNumber);
+	const parsed = funbridgeJsonSchema.parse(raw);
+	const warnings = [
+		...("source" in parsed ? (parsed.source.warnings ?? []) : []),
+	];
+	const partialBoards =
+		("partialBoards" in parsed ? parsed.partialBoards : undefined) ?? [];
+	const boardNumbers = [...parsed.boards, ...partialBoards].map(
+		(board) => board.boardNumber
+	);
 	if (new Set(boardNumbers).size !== boardNumbers.length) {
 		throw new Error("DUPLICATE_BOARD_NUMBER");
 	}
-	const boards = parsed.boards.map((board) => {
-		assertDistinctIndexes(board.auction, `boards.${board.boardNumber}.auction`);
-		assertDistinctIndexes(board.play, `boards.${board.boardNumber}.play`);
-		assertSequentialIndexes(
-			board.auction,
-			`boards.${board.boardNumber}.auction`
-		);
-		assertSequentialIndexes(board.play, `boards.${board.boardNumber}.play`);
-		assertAuctionSeatOrder(board);
-		assertValidDealAndPlay(board);
-		if (!board.auction) {
-			warnings.push(`BOARD_${board.boardNumber}_AUCTION_MISSING`);
-		}
-		if (!board.play || board.play.length < 52) {
-			warnings.push(`BOARD_${board.boardNumber}_PLAY_INCOMPLETE`);
-		}
-		return {
-			auction: board.auction,
-			deal: {
-				boardNumber: board.boardNumber,
-				contract: board.contract,
-				dealer: board.dealer,
-				declarer: board.declarer,
-				hands: board.hands,
-				result: board.result,
-				vulnerability: board.vulnerability,
-			},
-			heroSeat: board.heroSeat,
-			play: board.play,
-			playComplete: board.play?.length === 52,
-			score: board.score,
-		};
-	});
+	if (parsed.tournament.boardCount !== boardNumbers.length) {
+		warnings.push("BOARD_COUNT_MISMATCH");
+	}
 	return {
-		boards,
+		boards: [...parsed.boards, ...partialBoards].map((board) =>
+			normalizeBoard(board, warnings)
+		),
 		completion: parsed.tournament.completion,
 		declaredBoardCount: parsed.tournament.boardCount,
-		externalId: parsed.tournament.id,
+		externalId:
+			"source" in parsed
+				? parsed.source.sourceTournamentId
+				: parsed.tournament.funbridgeId,
 		family: parsed.tournament.family,
 		familyMetadata: familyMetadata(parsed.tournament),
-		funbridgeId: parsed.tournament.funbridgeId,
+		kind: "TOURNAMENT",
 		name: parsed.tournament.name,
 		participantCount: parsed.tournament.participantCount,
 		playedAt: new Date(parsed.tournament.playedAt),
@@ -333,18 +470,20 @@ export function parseFunbridgeJson(source: string): NormalizedFunbridgeImport {
 		warnings: [...new Set(warnings)],
 	};
 }
-
-export function dealToPbn(deal: BridgeDeal): string {
-	const order = seatOrderFrom(deal.dealer);
-	return `${deal.dealer}:${order.map((seat) => deal.hands[seat]).join(" ")}`;
+export function parseFunbridgeTournamentJson(
+	source: string
+): NormalizedFunbridgeImport {
+	const parsed = parseFunbridgeJson(source);
+	if (parsed.kind !== "TOURNAMENT") {
+		throw new Error("FUNBRIDGE_HISTORY_INDEX_REQUIRES_HISTORY_IMPORT");
+	}
+	return parsed;
 }
-
-function seatOrderFrom(
-	first: (typeof seats)[number]
-): (typeof seats)[number][] {
-	const start = seats.indexOf(first);
-	return Array.from(
+export function dealToPbn(deal: BridgeDeal): string {
+	const start = seats.indexOf(deal.dealer);
+	const order = Array.from(
 		{ length: 4 },
 		(_, offset) => seats[(start + offset) % 4] ?? "N"
 	);
+	return `${deal.dealer}:${order.map((seat) => deal.hands[seat]).join(" ")}`;
 }

@@ -1,12 +1,9 @@
 import {
-	IconBook2,
 	IconCards,
-	IconChartLine,
 	IconClubs,
 	IconLayoutDashboard,
 	IconLayoutSidebar,
 	IconLogout,
-	IconStack2,
 } from "@tabler/icons-react";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -35,10 +32,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	component: RootComponent,
 	head: () => ({
 		meta: [
-			{ title: "Bridge Portal | JCBLリストA学習" },
+			{ title: "Bridge Portal | Funbridge履歴" },
 			{
 				name: "description",
-				content: "JCBLリストAとFunbridge実戦を結ぶ個人学習ポータル",
+				content: "Funbridgeの大会・ボード履歴を閲覧する個人ポータル",
 			},
 		],
 		links: [{ rel: "icon", href: "/logo.png" }],
@@ -118,15 +115,13 @@ function Login() {
 	return (
 		<main className="login-page">
 			<section className="login-copy">
-				<p className="eyebrow">FUNBRIDGE × JCBL LIST A</p>
+				<p className="eyebrow">FUNBRIDGE HISTORY</p>
 				<h1>
-					実戦から、
+					Funbridgeの履歴を、
 					<br />
-					自分のシステムを磨く。
+					見返しやすく。
 				</h1>
-				<p>
-					ルールを覚えるだけで終わらせず、あなた自身のCallとCardingを実戦データから振り返ります。
-				</p>
+				<p>大会とボードの履歴を取り込み、Auction・Play・成績を確認できます。</p>
 			</section>
 			<form className="login-card" onSubmit={submit}>
 				<div className="brand-mark">
@@ -201,10 +196,7 @@ function Login() {
 
 const nav = [
 	["/", "Overview", IconLayoutDashboard],
-	["/rules", "Rules", IconBook2],
-	["/systems", "My Systems", IconStack2],
-	["/tournaments", "Tournaments", IconCards],
-	["/statistics", "Statistics", IconChartLine],
+	["/tournaments", "History", IconCards],
 ] as const;
 
 function RootComponent() {
