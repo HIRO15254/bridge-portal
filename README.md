@@ -56,6 +56,8 @@ bun run auth:bootstrap
 
 The supported files are `FUNBRIDGE_EXPORT` v1 tournament details and `FUNBRIDGE_HISTORY_INDEX` v1 history indexes. Their authoritative structure is the [Funbridge export-format documentation](./docs/funbridge-export-format.md) and the JSON Schema shipped with the skill. `BP_CIRCUIT`, `DAILY`, and `SERIES` are supported. Import validates 13 cards per hand, 52 unique cards, action indices, trick numbers, and card ownership. PBN, LIN, and USEBIO imports are out of scope.
 
+Automation can use the authenticated [history import API](./docs/history-import-api.md) to submit the same JSON without the browser UI.
+
 ## Deployment
 
 Cloudflare Worker、D1、Private R2、PagesとGitHub Actionsを使用します。詳しい運用手順は[deployment guide](./docs/deploy.md)を参照してください。テンプレート由来の初期化・preflightには同梱の[`better-t-app-setup`](./.agents/skills/better-t-app-setup/SKILL.md)を使用します。

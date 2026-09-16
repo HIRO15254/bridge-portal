@@ -36,6 +36,13 @@
       "when": 1789200000000,
       "tag": "0004_history_index",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789542696653,
+      "tag": "0005_history_import_tokens",
+      "breakpoints": true
     }
   ]
 }

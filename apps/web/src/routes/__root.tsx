@@ -1,6 +1,7 @@
 import {
 	IconCards,
 	IconClubs,
+	IconKey,
 	IconLayoutDashboard,
 	IconLayoutSidebar,
 	IconLogout,
@@ -197,6 +198,7 @@ function Login() {
 const nav = [
 	["/", "Overview", IconLayoutDashboard],
 	["/tournaments", "History", IconCards],
+	["/api-tokens", "API tokens", IconKey],
 ] as const;
 
 function RootComponent() {

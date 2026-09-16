@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiTokensRouteImport } from './routes/api-tokens'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
 import { Route as BoardsBoardIdRouteImport } from './routes/boards.$boardId'
 import { Route as TournamentsTournamentIdRouteImport } from './routes/tournaments_.$tournamentId'
@@ -17,6 +18,11 @@ import { Route as TournamentsTournamentIdRouteImport } from './routes/tournament
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTokensRoute = ApiTokensRouteImport.update({
+  id: '/api-tokens',
+  path: '/api-tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TournamentsRoute = TournamentsRouteImport.update({
@@ -37,12 +43,14 @@ const TournamentsTournamentIdRoute = TournamentsTournamentIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api-tokens': typeof ApiTokensRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api-tokens': typeof ApiTokensRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments/$tournamentId': typeof TournamentsTournamentIdRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api-tokens': typeof ApiTokensRoute
   '/tournaments': typeof TournamentsRoute
   '/boards/$boardId': typeof BoardsBoardIdRoute
   '/tournaments_/$tournamentId': typeof TournamentsTournamentIdRoute
@@ -57,12 +66,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/tournaments' | '/boards/$boardId' | '/tournaments/$tournamentId'
+    | '/'
+    | '/api-tokens'
+    | '/tournaments'
+    | '/boards/$boardId'
+    | '/tournaments/$tournamentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/tournaments' | '/boards/$boardId' | '/tournaments/$tournamentId'
+  to:
+    | '/'
+    | '/api-tokens'
+    | '/tournaments'
+    | '/boards/$boardId'
+    | '/tournaments/$tournamentId'
   id:
     | '__root__'
     | '/'
+    | '/api-tokens'
     | '/tournaments'
     | '/boards/$boardId'
     | '/tournaments_/$tournamentId'
@@ -70,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiTokensRoute: typeof ApiTokensRoute
   TournamentsRoute: typeof TournamentsRoute
   BoardsBoardIdRoute: typeof BoardsBoardIdRoute
   TournamentsTournamentIdRoute: typeof TournamentsTournamentIdRoute
@@ -82,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api-tokens': {
+      id: '/api-tokens'
+      path: '/api-tokens'
+      fullPath: '/api-tokens'
+      preLoaderRoute: typeof ApiTokensRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tournaments': {
@@ -110,6 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiTokensRoute: ApiTokensRoute,
   TournamentsRoute: TournamentsRoute,
   BoardsBoardIdRoute: BoardsBoardIdRoute,
   TournamentsTournamentIdRoute: TournamentsTournamentIdRoute,

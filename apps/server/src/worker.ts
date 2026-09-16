@@ -2,6 +2,7 @@ import { createContextFactory } from "@bridge-portal/api/context";
 import { appRouter } from "@bridge-portal/api/routers/index";
 import { constantTimeEqual, createAuth } from "@bridge-portal/auth";
 import {
+	apiToken,
 	auctionCall,
 	boardAttempt,
 	boardScore,
@@ -27,11 +28,13 @@ import {
 } from "@bridge-portal/domain";
 import { createServerEnv } from "@bridge-portal/env/server";
 import { trpcServer } from "@hono/trpc-server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+const IMPORT_TOKEN_LIFETIME_MS = 12 * 60 * 60 * 1000;
+const historyImportContentType = "application/json";
 const seats = ["N", "E", "S", "W"] as const;
 const bearerPattern = /^Bearer\s+/i;
 
@@ -79,13 +82,338 @@ async function sha256(value: ArrayBuffer | string): Promise<string> {
 		.join("");
 }
 
+function randomToken(): string {
+	return `bpih_${[...crypto.getRandomValues(new Uint8Array(32))]
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("")}`;
+}
+
+interface ImportResponse {
+	body: Record<string, unknown>;
+	status: 200 | 201 | 400;
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Import persistence and its compensating cleanup must remain adjacent for auditability.
+async function importFunbridgeJson(data: {
+	bytes: ArrayBuffer;
+	env: Env;
+	heroSeat?: string;
+	userId: string;
+}): Promise<ImportResponse> {
+	const hash = await sha256(data.bytes);
+	let parsed: ReturnType<typeof parseFunbridgeJson>;
+	try {
+		parsed = parseFunbridgeJson(new TextDecoder().decode(data.bytes));
+	} catch (error) {
+		return {
+			body: {
+				error: "INVALID_FUNBRIDGE_JSON",
+				message: error instanceof Error ? error.message : "Invalid JSON",
+			},
+			status: 400,
+		};
+	}
+	const db = createDb(data.env.DB);
+	const duplicate = await db.query.importRevision.findFirst({
+		where: and(
+			eq(importRevision.userId, data.userId),
+			eq(importRevision.sha256, hash)
+		),
+	});
+	if (duplicate) {
+		return {
+			body: {
+				duplicate: true,
+				importRevisionId: duplicate.id,
+				tournamentId: duplicate.tournamentId,
+			},
+			status: 200,
+		};
+	}
+
+	if (parsed.kind === "HISTORY_INDEX") {
+		const importId = crypto.randomUUID();
+		const indexId = crypto.randomUUID();
+		const r2Key = `${data.userId}/history-index/${parsed.family}/${hash}.json`;
+		try {
+			await data.env.RAW_IMPORTS.put(r2Key, data.bytes, {
+				httpMetadata: { contentType: historyImportContentType },
+				customMetadata: { sha256: hash, source: "funbridge-history-index" },
+			});
+			await db.insert(importRevision).values({
+				id: importId,
+				userId: data.userId,
+				sha256: hash,
+				r2Key,
+				status: "PENDING",
+				warnings: [],
+			});
+			await db.insert(historyIndex).values({
+				id: indexId,
+				importRevisionId: importId,
+				userId: data.userId,
+				family: parsed.family,
+				capturedAt: parsed.capturedAt,
+				captureMode: parsed.captureMode,
+				locale: parsed.locale,
+				coverage: parsed.coverage,
+			});
+			if (parsed.tournaments.length) {
+				await db.insert(historyIndexEntry).values(
+					parsed.tournaments.map((entry) => ({
+						id: crypto.randomUUID(),
+						historyIndexId: indexId,
+						sourceTournamentId: entry.sourceTournamentId,
+						title: entry.title,
+						playedAt:
+							(entry.startDate ?? entry.lastPlayedAt)
+								? new Date(entry.startDate ?? entry.lastPlayedAt ?? "")
+								: null,
+						registeredPlayerCount: entry.registeredPlayerCount,
+						inProgress: entry.inProgress,
+						rank: entry.rank ?? null,
+						score: entry.score ?? null,
+						scoreType: entry.scoreType ?? null,
+						boardCount: entry.boardCount ?? null,
+						playedBoardCount: entry.playedBoardCount ?? null,
+						metadata: entry,
+					}))
+				);
+			}
+			await db
+				.update(importRevision)
+				.set({ status: "ACTIVE" })
+				.where(eq(importRevision.id, importId));
+			return {
+				body: {
+					duplicate: false,
+					importRevisionId: importId,
+					kind: "HISTORY_INDEX",
+					rowCount: parsed.tournaments.length,
+				},
+				status: 201,
+			};
+		} catch (error) {
+			await db.delete(historyIndex).where(eq(historyIndex.id, indexId));
+			await db.delete(importRevision).where(eq(importRevision.id, importId));
+			await data.env.RAW_IMPORTS.delete(r2Key);
+			throw error;
+		}
+	}
+	const family = parsed.family;
+	const externalId = parsed.externalId;
+	const current = await db.query.tournament.findFirst({
+		where: and(
+			eq(tournament.userId, data.userId),
+			eq(tournament.family, family),
+			eq(tournament.externalId, externalId)
+		),
+	});
+	const createdTournament = !current;
+	const tournamentId = current?.id ?? crypto.randomUUID();
+	const previous = current
+		? await db.query.tournamentRevision.findFirst({
+				where: eq(tournamentRevision.tournamentId, tournamentId),
+				orderBy: desc(tournamentRevision.revisionNumber),
+			})
+		: undefined;
+	const revisionNumber = (previous?.revisionNumber ?? 0) + 1;
+	const importId = crypto.randomUUID();
+	const revisionId = crypto.randomUUID();
+	const externalIdKey = await sha256(externalId);
+	const r2Key = `${data.userId}/${family}/${externalIdKey}/${revisionNumber}-${hash}.json`;
+	const warnings = [...parsed.warnings];
+	if (
+		data.heroSeat &&
+		!seats.includes(data.heroSeat as (typeof seats)[number])
+	) {
+		return { body: { error: "INVALID_HERO_SEAT" }, status: 400 };
+	}
+	if (parsed.boards.some((board) => !(board.heroSeat || data.heroSeat))) {
+		warnings.push("HERO_SEAT_CONFIRMATION_REQUIRED");
+	}
+	try {
+		if (createdTournament) {
+			await db.insert(tournament).values({
+				id: tournamentId,
+				userId: data.userId,
+				externalId,
+				family,
+				name: parsed.name,
+			});
+		}
+		await data.env.RAW_IMPORTS.put(r2Key, data.bytes, {
+			httpMetadata: { contentType: historyImportContentType },
+			customMetadata: { sha256: hash, source: "funbridge" },
+		});
+		await db.insert(importRevision).values({
+			id: importId,
+			userId: data.userId,
+			tournamentId,
+			sha256: hash,
+			r2Key,
+			status: "PENDING",
+			warnings: [...new Set(warnings)],
+		});
+		await db.insert(tournamentRevision).values({
+			id: revisionId,
+			tournamentId,
+			importRevisionId: importId,
+			revisionNumber,
+			playedAt: parsed.playedAt,
+			completion: parsed.completion,
+			boardCount: parsed.declaredBoardCount,
+			scoreType: parsed.scoreType,
+			tournamentScore: parsed.score ?? null,
+			rank: parsed.rank ?? null,
+			participantCount: parsed.participantCount ?? null,
+			familyMetadata: parsed.familyMetadata,
+		});
+
+		for (const game of parsed.boards) {
+			const bridgeDeal = game.deal;
+			const pbnDeal = dealToPbn(bridgeDeal);
+			const dealHash = await sha256(
+				`${bridgeDeal.dealer}|${bridgeDeal.vulnerability}|${pbnDeal}`
+			);
+			let storedDeal = await db.query.deal.findFirst({
+				where: eq(deal.dealHash, dealHash),
+			});
+			if (!storedDeal) {
+				await db
+					.insert(deal)
+					.values({
+						id: crypto.randomUUID(),
+						dealHash,
+						dealer: bridgeDeal.dealer,
+						vulnerability: bridgeDeal.vulnerability,
+						pbnDeal,
+					})
+					.onConflictDoNothing();
+				storedDeal = await db.query.deal.findFirst({
+					where: eq(deal.dealHash, dealHash),
+				});
+			}
+			if (!storedDeal) {
+				throw new Error("DEAL_PERSISTENCE_FAILED");
+			}
+			const boardId = crypto.randomUUID();
+			const heroSeat =
+				game.heroSeat ??
+				(seats.includes(data.heroSeat as Seat)
+					? (data.heroSeat as Seat)
+					: undefined);
+			await db.insert(boardAttempt).values({
+				id: boardId,
+				tournamentRevisionId: revisionId,
+				dealId: storedDeal.id,
+				boardNumber: bridgeDeal.boardNumber,
+				heroSeat,
+				contract: bridgeDeal.contract,
+				declarer: bridgeDeal.declarer,
+				historyMetadata: {
+					comparison: game.comparison,
+					source: game.source,
+				},
+				result: bridgeDeal.result,
+				sourceStatus: game.status ?? null,
+			});
+			if (game.auction?.length) {
+				await db.insert(auctionCall).values(
+					game.auction.map((call) => ({
+						id: crypto.randomUUID(),
+						boardAttemptId: boardId,
+						callIndex: call.index,
+						seat: call.seat,
+						call: call.call,
+						alert: call.alert,
+					}))
+				);
+			}
+			if (game.play?.length) {
+				await db.insert(playAction).values(
+					game.play.map((action) => ({
+						id: crypto.randomUUID(),
+						boardAttemptId: boardId,
+						actionIndex: action.index,
+						trickNumber: action.trickNumber,
+						seat: action.seat,
+						card: action.card,
+					}))
+				);
+			}
+			await db.insert(boardScore).values({
+				id: crypto.randomUUID(),
+				boardAttemptId: boardId,
+				type: parsed.scoreType,
+				value: game.score ?? null,
+				contractMade:
+					bridgeDeal.result === undefined ? null : bridgeDeal.result >= 0,
+			});
+		}
+		await db
+			.update(tournament)
+			.set({
+				activeRevisionId: revisionId,
+				name: parsed.name,
+				updatedAt: new Date(),
+			})
+			.where(eq(tournament.id, tournamentId));
+		await db
+			.update(importRevision)
+			.set({ status: "ACTIVE" })
+			.where(eq(importRevision.id, importId));
+		return {
+			body: {
+				duplicate: false,
+				importRevisionId: importId,
+				tournamentId,
+				revisionNumber,
+				warnings: [...new Set(warnings)],
+			},
+			status: 201,
+		};
+	} catch (error) {
+		await db
+			.delete(tournamentRevision)
+			.where(eq(tournamentRevision.id, revisionId));
+		await db.delete(importRevision).where(eq(importRevision.id, importId));
+		if (createdTournament) {
+			await db.delete(tournament).where(eq(tournament.id, tournamentId));
+		}
+		await data.env.RAW_IMPORTS.delete(r2Key);
+		throw error;
+	}
+}
+
+async function importApiUserId(
+	env: Env,
+	authorization: string | undefined
+): Promise<string | undefined> {
+	const supplied = authorization?.replace(bearerPattern, "");
+	if (!supplied || supplied === authorization) {
+		return undefined;
+	}
+	const token = await createDb(env.DB).query.apiToken.findFirst({
+		where: and(
+			eq(apiToken.tokenHash, await sha256(supplied)),
+			gt(apiToken.expiresAt, new Date())
+		),
+	});
+	return token?.userId;
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("/*", (context, next) =>
 	cors({
 		origin: context.env.CORS_ORIGIN,
 		allowMethods: ["GET", "POST", "OPTIONS"],
-		allowHeaders: ["Content-Type", "Authorization"],
+		allowHeaders: [
+			"Content-Type",
+			"Authorization",
+			"X-Bridge-Portal-Hero-Seat",
+		],
 		credentials: true,
 	})(context, next)
 );
@@ -466,6 +794,75 @@ app.post("/api/imports/funbridge-json", async (context) => {
 		await context.env.RAW_IMPORTS.delete(r2Key);
 		throw error;
 	}
+});
+
+app.post("/api/v1/imports/funbridge-json", async (context) => {
+	const userId = await importApiUserId(
+		context.env,
+		context.req.header("Authorization")
+	);
+	if (!userId) {
+		return context.json({ error: "UNAUTHORIZED" }, 401);
+	}
+	if (
+		context.req
+			.header("Content-Type")
+			?.split(";", 1)[0]
+			?.trim()
+			.toLowerCase() !== historyImportContentType
+	) {
+		return context.json(
+			{
+				error: "UNSUPPORTED_MEDIA_TYPE",
+				message: `Content-Type must be ${historyImportContentType}.`,
+			},
+			415
+		);
+	}
+	const bytes = await context.req.raw.arrayBuffer();
+	if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMPORT_BYTES) {
+		return context.json(
+			{ error: "INVALID_FILE", maxBytes: MAX_IMPORT_BYTES },
+			400
+		);
+	}
+	const result = await importFunbridgeJson({
+		bytes,
+		env: context.env,
+		heroSeat: context.req.header("X-Bridge-Portal-Hero-Seat") ?? undefined,
+		userId,
+	});
+	return context.json(result.body, result.status);
+});
+
+app.post("/api/v1/import-tokens", async (context) => {
+	const auth = authFor(context.env);
+	const session = await auth.api.getSession({
+		headers: context.req.raw.headers,
+	});
+	if (!session) {
+		return context.json({ error: "UNAUTHORIZED" }, 401);
+	}
+	const body = await context.req
+		.json<{ label?: unknown }>()
+		.catch((): { label?: unknown } => ({}));
+	const label =
+		typeof body.label === "string" ? body.label.trim() : "History import";
+	if (!label || label.length > 100) {
+		return context.json({ error: "INVALID_TOKEN_LABEL" }, 400);
+	}
+	const accessToken = randomToken();
+	const expiresAt = new Date(Date.now() + IMPORT_TOKEN_LIFETIME_MS);
+	await createDb(context.env.DB)
+		.insert(apiToken)
+		.values({
+			id: crypto.randomUUID(),
+			userId: session.user.id,
+			label,
+			tokenHash: await sha256(accessToken),
+			expiresAt,
+		});
+	return context.json({ accessToken, expiresAt: expiresAt.toISOString() }, 201);
 });
 
 app.get("/api/boards/:id/export.pbn", async (context) => {

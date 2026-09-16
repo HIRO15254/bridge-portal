@@ -86,6 +86,23 @@ export const verification = sqliteTable(
 	(table) => [index("verification_identifier_idx").on(table.identifier)]
 );
 
+export const apiToken = sqliteTable(
+	"api_token",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		label: text("label").notNull(),
+		tokenHash: text("token_hash").notNull().unique(),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.default(sql`(unixepoch())`)
+			.notNull(),
+	},
+	(table) => [index("api_token_user_id_idx").on(table.userId)]
+);
+
 export const bridgeSystem = sqliteTable(
 	"bridge_system",
 	{
@@ -475,10 +492,14 @@ export const doubleDummyResult = sqliteTable(
 );
 
 export const userRelations = relations(user, ({ many }) => ({
+	apiTokens: many(apiToken),
 	sessions: many(session),
 	systems: many(bridgeSystem),
 	tournaments: many(tournament),
 	historyIndexes: many(historyIndex),
+}));
+export const apiTokenRelations = relations(apiToken, ({ one }) => ({
+	user: one(user, { fields: [apiToken.userId], references: [user.id] }),
 }));
 export const historyIndexRelations = relations(
 	historyIndex,
@@ -604,6 +625,8 @@ export const ruleEvaluationOverrideRelations = relations(
 
 export const schema = {
 	account,
+	apiToken,
+	apiTokenRelations,
 	auctionCall,
 	auctionCallRelations,
 	boardAttempt,
