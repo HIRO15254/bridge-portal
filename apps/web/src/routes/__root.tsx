@@ -17,11 +17,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { AppearancePicker } from "@/components/appearance-picker";
 import { Button } from "@/components/ui/button";
 import { registrationErrorMessage } from "@/lib/auth-error";
-import {
-	authClient,
-	autoSignInForPreview,
-	registrationIsAvailable,
-} from "@/utils/auth";
+import { authClient, registrationIsAvailable } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
 import "../index.css";
@@ -205,27 +201,11 @@ const nav = [
 
 function RootComponent() {
 	const session = authClient.useSession();
-	const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
 	const pageName = nav.find(([path]) => path === pathname)?.[1] ?? "Board";
-
-	useEffect(() => {
-		if (session.isPending || session.data || autoLoginAttempted) {
-			return;
-		}
-		setAutoLoginAttempted(true);
-		autoSignInForPreview()
-			.then((signedIn) => {
-				if (signedIn) {
-					window.location.reload();
-				}
-			})
-			.catch(() => undefined);
-	}, [autoLoginAttempted, session.data, session.isPending]);
-
-	if (session.isPending || !(session.data || autoLoginAttempted)) {
+	if (session.isPending) {
 		return (
 			<main className="center">
 				<div className="spinner" />

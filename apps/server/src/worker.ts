@@ -58,7 +58,6 @@ function authFor(env: Env, allowSignUp = false) {
 		allowSignUp,
 		baseURL: bindings.BETTER_AUTH_URL,
 		corsOrigin: bindings.CORS_ORIGIN,
-		previewAutoLogin: secret(env, "PREVIEW_AUTO_LOGIN") === "true",
 		secret: bindings.BETTER_AUTH_SECRET,
 	});
 }

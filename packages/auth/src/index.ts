@@ -1,8 +1,6 @@
 import { account, session, user, verification } from "@bridge-portal/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createAuthEndpoint } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
 
 // Cloudflare Workers rejects Web Crypto PBKDF2 iteration counts above 100,000.
 const PBKDF2_ITERATIONS = 100_000;
@@ -83,43 +81,7 @@ export interface AuthOptions {
 	allowSignUp?: boolean;
 	baseURL: string;
 	corsOrigin: string;
-	previewAutoLogin?: boolean;
 	secret: string;
-}
-
-function previewAutoLoginPlugin() {
-	return {
-		id: "preview-auto-login",
-		endpoints: {
-			previewAutoLogin: createAuthEndpoint(
-				"/preview/auto-login",
-				{ method: "POST" },
-				async (context) => {
-					const users = await context.context.internalAdapter.listUsers(2, 0);
-					if (users.length !== 1) {
-						return context.json(
-							{ error: "PREVIEW_USER_NOT_AVAILABLE" },
-							{ status: 409 }
-						);
-					}
-					const previewUser = users[0];
-					if (!previewUser) {
-						return context.json(
-							{ error: "PREVIEW_USER_NOT_AVAILABLE" },
-							{ status: 409 }
-						);
-					}
-					const previewSession =
-						await context.context.internalAdapter.createSession(previewUser.id);
-					await setSessionCookie(context, {
-						session: previewSession,
-						user: previewUser,
-					});
-					return context.json({ ok: true });
-				}
-			),
-		},
-	};
 }
 
 export function createAuth(
@@ -150,6 +112,5 @@ export function createAuth(
 				secure: usesSecureCookies,
 			},
 		},
-		plugins: options.previewAutoLogin ? [previewAutoLoginPlugin()] : undefined,
 	});
 }

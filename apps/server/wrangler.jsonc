@@ -6,8 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "BETTER_AUTH_URL": "http://127.0.0.1:8787",
-    "CORS_ORIGIN": "http://127.0.0.1:3001",
-    "PREVIEW_AUTO_LOGIN": "false"
+    "CORS_ORIGIN": "http://127.0.0.1:3001"
   },
   "observability": {
     "enabled": true,
