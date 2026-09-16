@@ -21,7 +21,6 @@ bun run dev
 bun run check-types
 bun run check
 bun run test
-bun run test:e2e
 bun run check:test-discovery
 bun run build
 ```

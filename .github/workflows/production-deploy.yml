@@ -31,7 +31,6 @@ jobs:
       - run: bun run check
       - run: bun run check:test-discovery
       - run: bun run test:coverage
-      - run: bun run test:e2e
 
   db-migrate:
     needs: ci

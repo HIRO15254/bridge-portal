@@ -12,7 +12,7 @@ Funbridgeの大会・ボード履歴を閲覧する単一ユーザー向けポ�
 - Cloudflare Workers、Hono、tRPC
 - Drizzle ORM、Cloudflare D1、Private R2
 - Better Authによる単一ユーザー認証
-- Bun workspace、Vitest、Playwright
+- Bun workspace、Vitest
 
 詳しいpackage境界とコマンドは[`AGENTS.md`](./AGENTS.md)を参照してください。
 
@@ -31,7 +31,6 @@ bun run dev
 bun run check-types
 bun run check
 bun run test
-bun run test:e2e
 bun run check:test-discovery
 bun run build
 ```
