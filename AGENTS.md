@@ -42,6 +42,27 @@ This file is the source of truth for every coding agent working in this reposito
 - Server, API, DB, env, and script tests must remain in their corresponding Vitest projects.
 - A new test directory or suffix must also be reflected in `vitest.config.ts` and the discovery check.
 
+## Linear work tracking
+
+After the Linear MCP connection is configured, Linear is the system of record for
+actionable follow-up work discovered during development.
+
+- Before creating an issue, search Linear for an existing issue that covers the
+  same problem. Update or link the existing issue instead of creating a duplicate.
+- Create an issue when the follow-up is concrete, independently actionable, and
+  not completed as part of the current request. Do not create issues for vague
+  ideas, optional polish, or observations without a clear next action.
+- Include the problem, affected code or behavior, the discovery context, and
+  acceptance criteria. Include relevant test or verification expectations.
+- Keep the issue in the configured engineering team and use the workspace's
+  agreed labels, priority, and project when those are known. Ask when the target
+  team or project is ambiguous rather than guessing.
+- Treat creating or updating Linear issues as a remote write: use the connected
+  Linear MCP tools and honor their approval requirements. Never put secrets,
+  tokens, or private customer data into an issue.
+- At handoff, link any created or updated Linear issues and update the current
+  issue's status only after the requested work and its verification are complete.
+
 ## Template boundary
 
 This repository intentionally contains only a health-check application and reusable development, test, D1, and Cloudflare delivery infrastructure. Do not add product-specific features, identity systems, external intelligence integrations, vendor project-management automation, or multi-branch release conventions unless a derived project explicitly requires them.

@@ -15,6 +15,21 @@ bun run db:migrate:local
 bun run dev
 ```
 
+## Linear integration
+
+This repository shares the Linear MCP endpoint through
+[`.codex/config.toml`](./.codex/config.toml). Each contributor must connect their
+own Linear account once from this repository:
+
+```sh
+codex mcp login linear
+```
+
+Select the `bridge-portal` workspace when prompted. OAuth credentials stay in
+the contributor's local Codex configuration and must not be committed. Linear
+writes require approval; the repository's `AGENTS.md` defines when discovered
+development work should be created or updated as an issue.
+
 検証コマンド:
 
 ```sh

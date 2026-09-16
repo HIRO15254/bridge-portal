@@ -1,0 +1,6 @@
+# Shared Linear MCP endpoint for Bridge Portal contributors.
+# OAuth credentials remain local to each contributor and must never be committed.
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
+# Read operations run normally; creating or updating Linear records requires approval.
+default_tools_approval_mode = "writes"
