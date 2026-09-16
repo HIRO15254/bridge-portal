@@ -127,6 +127,8 @@ jobs:
         env:
           IS_NEW: ${{ needs.d1.outputs.is_new }}
           PREVIEW_DB: ${{ needs.setup.outputs.db_name }}
+          PREVIEW_DEVELOPER_EMAIL: ${{ secrets.PREVIEW_DEVELOPER_EMAIL }}
+          PREVIEW_R2: ${{ needs.setup.outputs.r2_name }}
         run: |
           set -euo pipefail
           migrations="packages/db/src/migrations"
@@ -157,17 +159,31 @@ jobs:
             }
             trap restore_migrations EXIT
             apply_preview_migrations
-            data_tables=$(bunx wrangler d1 execute "$production_db" --remote --json \
-              --command="SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations'" \
-              -c /tmp/production-wrangler.jsonc)
-            if [ "$(echo "$data_tables" | jq -r '.[0].results | length')" -gt 0 ]; then
-              bunx wrangler d1 export "$production_db" --remote --no-schema \
-                --output="${RUNNER_TEMP}/production-data.sql" -c /tmp/production-wrangler.jsonc
+            test -n "$PREVIEW_DEVELOPER_EMAIL" || {
+              echo "::error::PREVIEW_DEVELOPER_EMAIL secret is required"
+              exit 1
+            }
+            bunx wrangler d1 export "$production_db" --remote \
+              --output="${RUNNER_TEMP}/production-data.sql" -c /tmp/production-wrangler.jsonc
+            bun scripts/preview-d1.ts extract \
+              --dump "${RUNNER_TEMP}/production-data.sql" \
+              --output "${RUNNER_TEMP}/preview-user-data.sql" \
+              --r2-keys "${RUNNER_TEMP}/preview-r2-keys.txt" \
+              --user-email "$PREVIEW_DEVELOPER_EMAIL"
+            if [ -s "${RUNNER_TEMP}/preview-user-data.sql" ]; then
               bun scripts/preview-d1.ts restore --database "$PREVIEW_DB" \
-                --config apps/server/wrangler.jsonc --dump "${RUNNER_TEMP}/production-data.sql"
+                --config apps/server/wrangler.jsonc --dump "${RUNNER_TEMP}/preview-user-data.sql"
             else
-              echo "Production D1 has no application tables; skipping data snapshot"
+              echo "Development user has no D1 records beyond an empty account"
             fi
+            production_r2=$(jq -r '.r2_buckets[0].bucket_name' /tmp/production-wrangler.jsonc)
+            while IFS= read -r r2_key; do
+              test -n "$r2_key" || continue
+              object_file=$(mktemp "${RUNNER_TEMP}/preview-r2-XXXXXX")
+              bunx wrangler r2 object get "${production_r2}/${r2_key}" --file "$object_file"
+              bunx wrangler r2 object put "${PREVIEW_R2}/${r2_key}" --file "$object_file" --content-type application/json
+              rm -f "$object_file"
+            done < "${RUNNER_TEMP}/preview-r2-keys.txt"
             restore_migrations
             trap - EXIT
           fi
@@ -201,7 +217,7 @@ jobs:
           API_URL: ${{ needs.setup.outputs.api_url }}
           WORKER_NAME: ${{ needs.setup.outputs.worker_name }}
         run: |
-          bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}" --var "BETTER_AUTH_URL:${API_URL}"
+          bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}" --var "BETTER_AUTH_URL:${API_URL}" --var "PREVIEW_AUTO_LOGIN:true"
           printf '%s' "$AUTH_SECRET" | bunx wrangler secret put BETTER_AUTH_SECRET --name "$WORKER_NAME"
 
   deploy-web:
@@ -251,4 +267,4 @@ jobs:
             | Web | ${{ needs.setup.outputs.web_url }} |
             | API | ${{ needs.setup.outputs.api_url }} |
 
-            **Database:** production snapshot in `${{ needs.setup.outputs.db_name }}`
+            **Database:** development account data only in `${{ needs.setup.outputs.db_name }}`

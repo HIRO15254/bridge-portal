@@ -15,7 +15,7 @@
 - `PRODUCTION_WEB_URL`（CORSで許可する完全一致のorigin）
 - `PRODUCTION_API_URL`（Web buildへ埋め込むWorker base URL）
 
-GitHub Actions secretとして`CLOUDFLARE_API_TOKEN`と`BETTER_AUTH_SECRET`を設定します。tokenにはWorkers Scripts、Pages、D1、R2を管理するために必要なaccount権限が必要です。同じ`BETTER_AUTH_SECRET`を`wrangler secret put`で本番Workerにも設定し、`wrangler.jsonc`には記録しません。
+GitHub Actions secretとして`CLOUDFLARE_API_TOKEN`、`BETTER_AUTH_SECRET`、`PREVIEW_DEVELOPER_EMAIL`を設定します。`PREVIEW_DEVELOPER_EMAIL`には、PR previewへ複製する本番の開発ユーザーのメールアドレスを設定します。tokenにはWorkers Scripts、Pages、D1、R2を管理するために必要なaccount権限が必要です。同じ`BETTER_AUTH_SECRET`を`wrangler secret put`で本番Workerにも設定し、`wrangler.jsonc`には記録しません。
 
 `wrangler.jsonc`を変更した後は`bun run cf:typegen`を実行し、生成されたbinding型をcommitします。
 
@@ -55,9 +55,13 @@ bunx wrangler secret delete BOOTSTRAP_TOKEN --name bridge-portal-api
 
 fork PRではpreviewを作成しません。repository secretを利用できず、信頼していないcodeへ本番dataを渡さないためです。
 
-PR databaseを初めて作成したとき、本番適用済みmigrationまでschemaを揃え、本番D1の全dataをexportし、triggerを一時的に外してからimportし、必ずtriggerを復元した後にPR branchだけの新しいmigrationを適用します。元Funbridge JSONは複製せず、PRごとに空の非公開R2 bucketを使います。空schema、migrationなし、空dumpはいずれも正常系です。以後のpushでは同じpreview resourceを再利用し、未適用migrationだけを追加適用します。PR close時はWorker、Pages deployment、D1 database、R2 bucketを冪等に削除します。
+PR databaseを初めて作成したとき、本番適用済みmigrationまでschemaを揃えます。本番D1のexportはGitHub Actions runner上の一時ファイルとしてだけ使用し、`PREVIEW_DEVELOPER_EMAIL`で指定した開発ユーザーと、そのユーザーのsystems、tournaments、imports、history index、boards、evaluations、関連するdealsだけを抽出してpreview D1へimportします。ほかのユーザー、認証session、verificationはpreview DBへ入れません。対象importのR2 objectだけをpreview bucketへ複製します。branch migrationはこのsnapshotの後に適用します。
 
-> **データ公開範囲の警告:** 最初のpreview snapshotは、匿名化していない本番D1の完全な複製です。このリポジトリへbranchを作成できる全員を、本番dataへアクセス可能な信頼済み利用者として扱うことになります。この前提が合わない場合は、preview deployを有効にする前にsnapshot手順を無効化するか、匿名化したfixture生成へ置き換えてください。
+preview Workerでは`PREVIEW_AUTO_LOGIN`を有効にします。Web URLを開くと、上記の唯一の開発ユーザーに対する新しい短命sessionを発行して自動ログインします。本番Workerではこのendpointは存在しません。
+
+> **アクセス制御の警告:** preview URLを開ける人は開発ユーザーとして操作できます。PR previewを公開URLのまま使う場合は、そこに複製される開発ユーザーデータを閲覧・変更できる人を限定するため、Cloudflare Accessなどでpreview URLを保護してください。
+
+空schema、migrationなし、対象ユーザーの空dataはいずれも正常系です。以後のpushでは同じpreview resourceを再利用し、未適用migrationだけを追加適用します。PR close時はWorker、Pages deployment、D1 database、R2 bucketを冪等に削除します。
 
 export中はsource D1への他のrequestが一時的にblockされるため、大規模snapshotの実行時刻には注意してください。
 

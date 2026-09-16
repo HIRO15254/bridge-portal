@@ -6,6 +6,7 @@ export const serverEnvSchema = z.object({
 	BOOTSTRAP_TOKEN: z.string().min(32).optional(),
 	CORS_ORIGIN: z.url(),
 	DB: z.unknown().refine((value) => value !== undefined),
+	PREVIEW_AUTO_LOGIN: z.enum(["true", "false"]).optional(),
 	RAW_IMPORTS: z.unknown().refine((value) => value !== undefined),
 });
 
