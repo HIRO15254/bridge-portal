@@ -1,4 +1,5 @@
 const portalImportPath = "/api/v1/imports/funbridge-json";
+const deviceAuthorizationPath = "/api/v1/device-authorizations";
 const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
 
 export class PortalUploadError extends Error {
@@ -128,4 +129,92 @@ export async function uploadPortalJson({
 		}
 	}
 	throw lastError;
+}
+
+export async function startPortalAuthorization({
+	fetchFn = fetch,
+	portalApiUrl,
+}) {
+	const response = await fetchFn(
+		`${normalizePortalApiUrl(portalApiUrl)}${deviceAuthorizationPath}`,
+		{ method: "POST" }
+	);
+	const payload = await errorPayload(response);
+	if (!response.ok) {
+		throw uploadError(response, payload);
+	}
+	if (
+		!(
+			typeof payload?.deviceCode === "string" &&
+			typeof payload.userCode === "string" &&
+			typeof payload.verificationUriComplete === "string" &&
+			typeof payload.interval === "number" &&
+			typeof payload.expiresIn === "number"
+		)
+	) {
+		throw new PortalUploadError(
+			"PORTAL_AUTHORIZATION_INVALID",
+			"Portal の認証開始レスポンスが不正です。"
+		);
+	}
+	return payload;
+}
+
+export async function pollPortalAuthorization({
+	deviceCode,
+	fetchFn = fetch,
+	portalApiUrl,
+}) {
+	const response = await fetchFn(
+		`${normalizePortalApiUrl(portalApiUrl)}${deviceAuthorizationPath}/token`,
+		{
+			body: JSON.stringify({ deviceCode }),
+			headers: { "Content-Type": "application/json" },
+			method: "POST",
+		}
+	);
+	const payload = await errorPayload(response);
+	if (response.status === 428 && payload?.error === "AUTHORIZATION_PENDING") {
+		return undefined;
+	}
+	if (!response.ok) {
+		throw uploadError(response, payload);
+	}
+	if (typeof payload?.accessToken !== "string") {
+		throw new PortalUploadError(
+			"PORTAL_AUTHORIZATION_INVALID",
+			"Portal の認証完了レスポンスが不正です。"
+		);
+	}
+	return payload.accessToken;
+}
+
+export async function authorizePortal({
+	fetchFn = fetch,
+	onStart,
+	portalApiUrl,
+	sleep = (milliseconds) =>
+		new Promise((resolve) => setTimeout(resolve, milliseconds)),
+}) {
+	const authorization = await startPortalAuthorization({
+		fetchFn,
+		portalApiUrl,
+	});
+	await onStart?.(authorization);
+	const expiresAt = Date.now() + authorization.expiresIn * 1000;
+	while (Date.now() < expiresAt) {
+		await sleep(authorization.interval * 1000);
+		const accessToken = await pollPortalAuthorization({
+			deviceCode: authorization.deviceCode,
+			fetchFn,
+			portalApiUrl,
+		});
+		if (accessToken) {
+			return accessToken;
+		}
+	}
+	throw new PortalUploadError(
+		"PORTAL_AUTHORIZATION_EXPIRED",
+		"Portal の認証コードが期限切れです。もう一度接続してください。"
+	);
 }

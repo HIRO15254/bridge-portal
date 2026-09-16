@@ -12,6 +12,7 @@ import {
 	buildTournamentExport,
 } from "../assets/chrome-extension/lib/normalize.js";
 import {
+	authorizePortal,
 	normalizePortalApiUrl,
 	PortalUploadError,
 	uploadPortalJson,
@@ -111,6 +112,44 @@ assert.equal(
 assert.equal(
 	uploadCalls[0].options.headers.Authorization,
 	"Bearer bpih_test-only"
+);
+const authorizationRequests = [];
+let authorizationPolls = 0;
+const deviceToken = await authorizePortal({
+	fetchFn: (url, options) => {
+		authorizationRequests.push({ options, url });
+		if (url.endsWith("/device-authorizations")) {
+			return new Response(
+				JSON.stringify({
+					deviceCode: "bpih_device-test",
+					expiresIn: 600,
+					interval: 1,
+					userCode: "ABCDEFGH",
+					verificationUriComplete:
+						"https://bridge-portal.hiro15254.com/device-authorizations?user_code=ABCDEFGH",
+				}),
+				{ headers: { "Content-Type": "application/json" }, status: 201 }
+			);
+		}
+		authorizationPolls += 1;
+		return authorizationPolls === 1
+			? new Response(JSON.stringify({ error: "AUTHORIZATION_PENDING" }), {
+					headers: { "Content-Type": "application/json" },
+					status: 428,
+				})
+			: new Response(JSON.stringify({ accessToken: "bpih_device-test" }), {
+					headers: { "Content-Type": "application/json" },
+					status: 200,
+				});
+	},
+	portalApiUrl: productionPortalApiUrl,
+	sleep: () => undefined,
+});
+assert.equal(deviceToken, "bpih_device-test");
+assert.equal(authorizationPolls, 2);
+assert.equal(
+	authorizationRequests[0].url,
+	`${productionPortalApiUrl}/api/v1/device-authorizations`
 );
 let retryAttempts = 0;
 const retryDelays = [];

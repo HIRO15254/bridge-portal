@@ -2,7 +2,10 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { uploadPortalJson } from "../assets/chrome-extension/lib/portal.js";
+import {
+	authorizePortal,
+	uploadPortalJson,
+} from "../assets/chrome-extension/lib/portal.js";
 
 const acceptedFormats = new Set([
 	"FUNBRIDGE_EXPORT",
@@ -12,9 +15,7 @@ const productionPortalApiUrl =
 	"https://bridge-portal-api.hiro15254.workers.dev";
 
 function usage() {
-	console.error(
-		"Usage: BRIDGE_PORTAL_HISTORY_ACCESS_TOKEN=… node upload-to-portal.mjs <file-or-directory>"
-	);
+	console.error("Usage: node upload-to-portal.mjs <file-or-directory>");
 }
 
 async function collectJsonFiles(target) {
@@ -53,8 +54,7 @@ async function readExport(file) {
 }
 
 const target = process.argv[2];
-const accessToken = process.env.BRIDGE_PORTAL_HISTORY_ACCESS_TOKEN;
-if (!(target && accessToken)) {
+if (!target) {
 	usage();
 	process.exit(2);
 }
@@ -73,6 +73,18 @@ if (files.length === 0) {
 
 let duplicates = 0;
 let uploaded = 0;
+console.log("Bridge Portal への接続を開始します。");
+const accessToken = await authorizePortal({
+	onStart: ({ userCode, verificationUriComplete }) => {
+		console.log(`ブラウザで開く: ${verificationUriComplete}`);
+		console.log(`表示されたコード: ${userCode}`);
+		console.log(
+			"Portalへログインして、この端末からの履歴投入を承認してください。"
+		);
+	},
+	portalApiUrl: productionPortalApiUrl,
+});
+console.log("Portalへの接続が承認されました。投入を開始します。");
 for (const file of files) {
 	try {
 		const result = await uploadPortalJson({

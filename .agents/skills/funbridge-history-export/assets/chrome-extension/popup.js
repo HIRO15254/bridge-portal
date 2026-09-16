@@ -3,14 +3,13 @@ const elements = {
 	connect: document.querySelector("#connect"),
 	disconnect: document.querySelector("#disconnect"),
 	export: document.querySelector("#export"),
-	portalToken: document.querySelector("#portal-token"),
+	portalConnect: document.querySelector("#portal-connect"),
 	progress: document.querySelector("#progress"),
 	statusDetail: document.querySelector("#status-detail"),
 	statusDot: document.querySelector("#status-dot"),
 	statusTitle: document.querySelector("#status-title"),
 };
 const chromeApi = globalThis.chrome;
-let lastState;
 
 function statusClass(state, busy, ready) {
 	if (state.phase === "ERROR") {
@@ -23,9 +22,11 @@ function statusClass(state, busy, ready) {
 }
 
 function render(state) {
-	lastState = state;
 	const connected = state.connected === true;
-	const busy = state.phase === "EXPORTING" || state.phase === "UPLOADING";
+	const busy =
+		state.phase === "EXPORTING" ||
+		state.phase === "UPLOADING" ||
+		state.phase === "PORTAL_AUTHORIZING";
 	const ready = connected && state.authObserved;
 	elements.statusTitle.textContent = state.title;
 	elements.statusDetail.textContent = state.detail;
@@ -33,8 +34,8 @@ function render(state) {
 	elements.connect.disabled = connected;
 	elements.disconnect.disabled = !connected || busy;
 	elements.export.disabled = !ready || busy;
-	elements.upload.disabled =
-		!ready || busy || !elements.portalToken.value.trim();
+	elements.upload.disabled = !ready || busy || !state.portalAuthorized;
+	elements.portalConnect.disabled = busy || state.portalAuthorized;
 	elements.accountId.disabled = busy;
 	if (busy && state.progress) {
 		elements.progress.hidden = false;
@@ -84,7 +85,6 @@ elements.export.addEventListener("click", async () => {
 elements.upload.addEventListener("click", async () => {
 	try {
 		await send({
-			accessToken: elements.portalToken.value.trim(),
 			accountId: elements.accountId.value.trim(),
 			type: "EXPORT_PORTAL",
 		});
@@ -97,9 +97,15 @@ elements.upload.addEventListener("click", async () => {
 	}
 });
 
-elements.portalToken.addEventListener("input", () => {
-	if (lastState) {
-		render(lastState);
+elements.portalConnect.addEventListener("click", async () => {
+	try {
+		await send({ type: "AUTHORIZE_PORTAL" });
+	} catch (error) {
+		render({
+			phase: "ERROR",
+			title: "Portal認証を開始できません",
+			detail: error.message,
+		});
 	}
 });
 

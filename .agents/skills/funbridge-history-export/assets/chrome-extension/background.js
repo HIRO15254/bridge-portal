@@ -1,5 +1,5 @@
 import { exportAllHistory } from "./lib/exporter.js";
-import { uploadPortalJson } from "./lib/portal.js";
+import { authorizePortal, uploadPortalJson } from "./lib/portal.js";
 import {
 	authorizationFrom,
 	parseApiUrl,
@@ -15,11 +15,13 @@ const funbridgePagePattern = /^https:\/\/([^.]+\.)?funbridge\.com\//;
 const chromeApi = globalThis.chrome;
 
 let session;
+let portalAccessToken;
 let state = {
 	authObserved: false,
 	connected: false,
 	detail: "Funbridgeのタブを開いて「検出を開始」を押してください。",
 	phase: "IDLE",
+	portalAuthorized: false,
 	title: "未接続",
 };
 
@@ -52,6 +54,7 @@ async function activeFunbridgeTab() {
 async function disconnect() {
 	const current = session;
 	session = undefined;
+	portalAccessToken = undefined;
 	if (current) {
 		try {
 			await chromeApi.debugger.detach(current.debuggee);
@@ -64,6 +67,7 @@ async function disconnect() {
 		connected: false,
 		detail: "Funbridgeのタブを開いて「検出を開始」を押してください。",
 		phase: "IDLE",
+		portalAuthorized: false,
 		progress: undefined,
 		title: "未接続",
 	});
@@ -146,12 +150,14 @@ chromeApi.debugger.onDetach.addListener((source) => {
 		return;
 	}
 	session = undefined;
+	portalAccessToken = undefined;
 	publish({
 		authObserved: false,
 		connected: false,
 		detail:
 			"ブラウザーとの接続が解除されました。必要なら再度検出してください。",
 		phase: "IDLE",
+		portalAuthorized: false,
 		progress: undefined,
 		title: "接続解除",
 	});
@@ -282,13 +288,61 @@ async function startPortalExport(accountId, accessToken) {
 	}
 }
 
+async function authorizePortalForExtension() {
+	try {
+		portalAccessToken = undefined;
+		publish({
+			detail: "ブラウザでPortalへログインし、この端末を承認してください。",
+			phase: "PORTAL_AUTHORIZING",
+			portalAuthorized: false,
+			title: "Portal認証を待機中",
+		});
+		portalAccessToken = await authorizePortal({
+			onStart: async ({ userCode, verificationUriComplete }) => {
+				await chromeApi.tabs.create({ url: verificationUriComplete });
+				publish({
+					detail: `Portal画面でコード ${userCode} を承認してください。`,
+				});
+			},
+			portalApiUrl: productionPortalApiUrl,
+		});
+		publish({
+			detail: "Portalへの接続が承認されました。全履歴を投入できます。",
+			phase: "READY",
+			portalAuthorized: true,
+			title: "Portal投入準備完了",
+		});
+	} catch (error) {
+		portalAccessToken = undefined;
+		publish({
+			detail: error instanceof Error ? error.message : String(error),
+			phase: "ERROR",
+			portalAuthorized: false,
+			title: "Portal認証に失敗しました",
+		});
+	}
+}
+
 chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message.type === "GET_STATE") {
 		sendResponse({ ok: true, state: publicState() });
 		return false;
 	}
+	if (message.type === "AUTHORIZE_PORTAL") {
+		if (state.phase === "PORTAL_AUTHORIZING") {
+			sendResponse({ error: "Portal認証を待機中です。", ok: false });
+			return false;
+		}
+		authorizePortalForExtension();
+		sendResponse({ ok: true, state: publicState() });
+		return false;
+	}
 	if (message.type === "EXPORT" || message.type === "EXPORT_PORTAL") {
-		if (state.phase === "EXPORTING" || state.phase === "UPLOADING") {
+		if (
+			state.phase === "EXPORTING" ||
+			state.phase === "UPLOADING" ||
+			state.phase === "PORTAL_AUTHORIZING"
+		) {
 			sendResponse({
 				error: "すでに取得中です。",
 				ok: false,
@@ -298,7 +352,12 @@ chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		}
 		const start =
 			message.type === "EXPORT_PORTAL"
-				? () => startPortalExport(message.accountId, message.accessToken)
+				? () => {
+						if (!portalAccessToken) {
+							throw new Error("先にPortalへの接続を完了してください。");
+						}
+						return startPortalExport(message.accountId, portalAccessToken);
+					}
 				: () => startExport(message.accountId);
 		start().catch((error) => {
 			publish({
