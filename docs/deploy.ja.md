@@ -15,7 +15,7 @@
 - `PRODUCTION_WEB_URL`（CORSで許可する完全一致のorigin）
 - `PRODUCTION_API_URL`（Web buildへ埋め込むWorker base URL）
 
-GitHub Actions secretとして`CLOUDFLARE_API_TOKEN`、`BETTER_AUTH_SECRET`、`PREVIEW_DEVELOPER_EMAIL`、`PREVIEW_ACCESS_EMAILS`を設定します。`PREVIEW_DEVELOPER_EMAIL`には、PR previewへ複製する本番の開発ユーザーのメールアドレスを設定します。`PREVIEW_ACCESS_EMAILS`にはpreviewを閲覧できるCloudflare Accessユーザーのメールアドレスをカンマ区切りで設定します。tokenにはWorkers Scripts、Pages、D1、R2に加え、Cloudflare Accessの**Apps and Policies: Write**を管理するために必要なaccount権限が必要です。同じ`BETTER_AUTH_SECRET`を`wrangler secret put`で本番Workerにも設定し、`wrangler.jsonc`には記録しません。
+GitHub Actions secretとして`CLOUDFLARE_API_TOKEN`、`BETTER_AUTH_SECRET`、`PREVIEW_DEVELOPER_EMAIL`を設定します。`PREVIEW_DEVELOPER_EMAIL`には、PR previewへ複製する本番の開発ユーザーのメールアドレスを設定します。tokenにはWorkers Scripts、Pages、D1、R2を管理するために必要なaccount権限が必要です。同じ`BETTER_AUTH_SECRET`を`wrangler secret put`で本番Workerにも設定し、`wrangler.jsonc`には記録しません。
 
 `wrangler.jsonc`を変更した後は`bun run cf:typegen`を実行し、生成されたbinding型をcommitします。
 
@@ -59,7 +59,7 @@ PR databaseを初めて作成したとき、本番適用済みmigrationまでsch
 
 preview Workerでは`PREVIEW_AUTO_LOGIN`を有効にします。Web URLを開くと、上記の唯一の開発ユーザーに対する新しい短命sessionを発行して自動ログインします。本番Workerではこのendpointは存在しません。
 
-> **アクセス制御:** Pages projectで一度だけ **Settings > General > Enable access policy** を有効にして、preview WebをCloudflare Accessで保護してください。workflowはPRごとにpreview API Worker用のAccess applicationを作成し、`PREVIEW_ACCESS_EMAILS`のユーザーだけを許可します。WebとAPIは異なるdomainのため、最初のアクセス時はAPIのAccess認証を経由してWebへ戻り、その後に自動ログインします。
+> **アクセス制御の警告:** preview URLを開ける人は開発ユーザーとして操作できます。PR previewを公開URLのまま使う場合は、そこに複製される開発ユーザーデータを閲覧・変更できる人を限定するため、Cloudflare Accessなどでpreview URLを保護してください。
 
 空schema、migrationなし、対象ユーザーの空dataはいずれも正常系です。以後のpushでは同じpreview resourceを再利用し、未適用migrationだけを追加適用します。PR close時はWorker、Pages deployment、D1 database、R2 bucketを冪等に削除します。
 

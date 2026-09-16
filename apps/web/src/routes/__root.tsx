@@ -21,7 +21,6 @@ import {
 	authClient,
 	autoSignInForPreview,
 	registrationIsAvailable,
-	requestPreviewApiAccess,
 } from "@/utils/auth";
 import type { trpc } from "@/utils/trpc";
 
@@ -218,24 +217,12 @@ function RootComponent() {
 		}
 		setAutoLoginAttempted(true);
 		autoSignInForPreview()
-			.then((result) => {
-				if (result === "signed-in") {
+			.then((signedIn) => {
+				if (signedIn) {
 					window.location.reload();
 				}
-				if (
-					result === "unreachable" &&
-					!new URLSearchParams(window.location.search).has("previewApiAccess")
-				) {
-					requestPreviewApiAccess();
-				}
 			})
-			.catch(() => {
-				if (
-					!new URLSearchParams(window.location.search).has("previewApiAccess")
-				) {
-					requestPreviewApiAccess();
-				}
-			});
+			.catch(() => undefined);
 	}, [autoLoginAttempted, session.data, session.isPending]);
 
 	if (session.isPending || !(session.data || autoLoginAttempted)) {

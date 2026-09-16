@@ -84,26 +84,6 @@ describe("preview auto-login", () => {
 		expect(response.status).toBe(404);
 	});
 
-	it("redirects through the preview API only to the configured web origin", async () => {
-		const runtime = await bindings();
-		const valid = await app.request(
-			"/api/preview/access?returnTo=https%3A%2F%2Fweb.example.test%2Ftournaments",
-			undefined,
-			runtime
-		);
-		expect(valid.status).toBe(302);
-		expect(valid.headers.get("location")).toBe(
-			"https://web.example.test/tournaments?previewApiAccess=1"
-		);
-
-		const invalid = await app.request(
-			"/api/preview/access?returnTo=https%3A%2F%2Fother.example.test",
-			undefined,
-			runtime
-		);
-		expect(invalid.status).toBe(400);
-	});
-
 	it("creates a fresh Better Auth session for the copied development user", async () => {
 		const runtime = await bindings();
 		const bootstrap = await app.request(
