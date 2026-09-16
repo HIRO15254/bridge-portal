@@ -219,6 +219,72 @@ jobs:
         run: |
           bunx wrangler deploy --name "$WORKER_NAME" --var "CORS_ORIGIN:${WEB_URL}" --var "BETTER_AUTH_URL:${API_URL}" --var "PREVIEW_AUTO_LOGIN:true"
           printf '%s' "$AUTH_SECRET" | bunx wrangler secret put BETTER_AUTH_SECRET --name "$WORKER_NAME"
+      - name: Protect preview API with Cloudflare Access
+        env:
+          ACCESS_EMAILS: ${{ secrets.PREVIEW_ACCESS_EMAILS }}
+          API_URL: ${{ needs.setup.outputs.api_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          WEB_URL: ${{ needs.setup.outputs.web_url }}
+        run: |
+          set -euo pipefail
+          test -n "$ACCESS_EMAILS" || {
+            echo "::error::PREVIEW_ACCESS_EMAILS secret is required"
+            exit 1
+          }
+          access_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/access/apps"
+          app_name="Bridge Portal PR ${PR_NUMBER} API"
+          api_host="${API_URL#https://}"
+          email_rules=$(jq -Rn --arg emails "$ACCESS_EMAILS" '
+            $emails
+            | split(",")
+            | map(gsub("^[[:space:]]+|[[:space:]]+$"; ""))
+            | map(select(length > 0))
+            | map({ email: { email: . } })
+          ')
+          test "$(echo "$email_rules" | jq 'length')" -gt 0 || {
+            echo "::error::PREVIEW_ACCESS_EMAILS must contain at least one email address"
+            exit 1
+          }
+          existing_ids=$(curl -sf --retry 3 "${access_api}?per_page=1000" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            | jq -r --arg name "$app_name" '.result[] | select(.name == $name) | .id')
+          while IFS= read -r app_id; do
+            test -n "$app_id" || continue
+            curl -sf --retry 3 -X DELETE "${access_api}/${app_id}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" >/dev/null
+          done <<< "$existing_ids"
+          payload=$(jq -n \
+            --arg domain "$api_host" \
+            --arg name "$app_name" \
+            --arg origin "$WEB_URL" \
+            --argjson email_rules "$email_rules" '
+              {
+                app_launcher_visible: false,
+                cors_headers: {
+                  allow_all_headers: false,
+                  allow_all_methods: false,
+                  allow_all_origins: false,
+                  allow_credentials: true,
+                  allowed_headers: ["Authorization", "Content-Type"],
+                  allowed_methods: ["GET", "POST", "OPTIONS"],
+                  allowed_origins: [$origin],
+                  max_age: 86400
+                },
+                domain: $domain,
+                name: $name,
+                policies: [{
+                  decision: "allow",
+                  include: $email_rules,
+                  name: "Allow PR preview reviewers"
+                }],
+                session_duration: "24h",
+                type: "self_hosted"
+              }
+            ')
+          curl -sf --retry 3 -X POST "$access_api" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" | jq -e '.success == true' >/dev/null
 
   deploy-web:
     needs: [setup, deploy-api]

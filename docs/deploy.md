@@ -15,7 +15,7 @@ Copy the production D1 UUID into `apps/server/wrangler.jsonc`; never commit the 
 - `PRODUCTION_WEB_URL` (the exact allowed CORS origin)
 - `PRODUCTION_API_URL` (the Worker base URL embedded in the web build)
 
-Configure `CLOUDFLARE_API_TOKEN`, `BETTER_AUTH_SECRET`, and `PREVIEW_DEVELOPER_EMAIL` as GitHub Actions secrets. Set `PREVIEW_DEVELOPER_EMAIL` to the production email address of the development user whose data should be copied to PR previews. The Cloudflare token needs the account permissions required to manage Workers Scripts, Pages, D1, and R2. Set the same `BETTER_AUTH_SECRET` on the production Worker with `wrangler secret put`; never place it in `wrangler.jsonc`.
+Configure `CLOUDFLARE_API_TOKEN`, `BETTER_AUTH_SECRET`, `PREVIEW_DEVELOPER_EMAIL`, and `PREVIEW_ACCESS_EMAILS` as GitHub Actions secrets. Set `PREVIEW_DEVELOPER_EMAIL` to the production email address of the development user whose data should be copied to PR previews. Set `PREVIEW_ACCESS_EMAILS` to a comma-separated list of Cloudflare Access users who may view previews. The Cloudflare token needs account permissions to manage Workers Scripts, Pages, D1, R2, and Cloudflare Access **Apps and Policies: Write**. Set the same `BETTER_AUTH_SECRET` on the production Worker with `wrangler secret put`; never place it in `wrangler.jsonc`.
 
 After changing `wrangler.jsonc`, run `bun run cf:typegen` and commit the generated binding declarations.
 
@@ -59,7 +59,7 @@ When a PR database is first created, the workflow aligns its schema with product
 
 The preview Worker enables `PREVIEW_AUTO_LOGIN`. Opening the Web URL creates a fresh short-lived session for the copied development user and signs the visitor in automatically. The production Worker does not expose this endpoint.
 
-> **Access warning:** Anyone who can open a preview URL can act as the development user. Protect preview URLs with Cloudflare Access or an equivalent control when the development user's data is sensitive.
+> **Access control:** Once, enable **Settings > General > Enable access policy** in the Pages project to protect preview Web URLs with Cloudflare Access. The workflow creates an Access application for each preview API Worker and allows only `PREVIEW_ACCESS_EMAILS`. Because Web and API use different domains, the first visit passes through API Access and returns to Web before automatic sign-in.
 
 Empty schemas, no migrations, and empty development-user data are all valid. Later pushes reuse the same preview resources and apply only new migrations. Closing the PR deletes the Worker, Pages deployment, D1 database, and R2 bucket idempotently.
 

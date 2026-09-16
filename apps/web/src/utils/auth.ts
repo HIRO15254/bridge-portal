@@ -3,7 +3,9 @@ import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({ baseURL: env.VITE_SERVER_URL });
 
-export async function autoSignInForPreview(): Promise<boolean> {
+export type PreviewSignInResult = "signed-in" | "unavailable" | "unreachable";
+
+export async function autoSignInForPreview(): Promise<PreviewSignInResult> {
 	const response = await fetch(
 		`${env.VITE_SERVER_URL}/api/auth/preview/auto-login`,
 		{
@@ -11,7 +13,18 @@ export async function autoSignInForPreview(): Promise<boolean> {
 			method: "POST",
 		}
 	);
-	return response.ok;
+	if (response.ok) {
+		return "signed-in";
+	}
+	return response.status === 404 ? "unavailable" : "unreachable";
+}
+
+export function requestPreviewApiAccess(): void {
+	const returnTo = new URL(window.location.href);
+	returnTo.searchParams.delete("previewApiAccess");
+	window.location.assign(
+		`${env.VITE_SERVER_URL}/api/preview/access?returnTo=${encodeURIComponent(returnTo.toString())}`
+	);
 }
 
 export async function registrationIsAvailable(): Promise<boolean> {

@@ -112,6 +112,26 @@ app.on(["GET", "POST"], "/api/auth/*", (context) =>
 	authFor(context.env).handler(context.req.raw)
 );
 
+app.get("/api/preview/access", (context) => {
+	if (secret(context.env, "PREVIEW_AUTO_LOGIN") !== "true") {
+		return context.json({ error: "NOT_FOUND" }, 404);
+	}
+	const returnTo = context.req.query("returnTo");
+	if (!returnTo) {
+		return context.json({ error: "INVALID_RETURN_URL" }, 400);
+	}
+	try {
+		const url = new URL(returnTo);
+		if (url.origin !== context.env.CORS_ORIGIN) {
+			return context.json({ error: "INVALID_RETURN_URL" }, 400);
+		}
+		url.searchParams.set("previewApiAccess", "1");
+		return context.redirect(url.toString(), 302);
+	} catch {
+		return context.json({ error: "INVALID_RETURN_URL" }, 400);
+	}
+});
+
 app.post("/api/bootstrap", async (context) => {
 	const token = secret(context.env, "BOOTSTRAP_TOKEN");
 	const supplied = context.req
