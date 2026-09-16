@@ -61,6 +61,7 @@ FunbridgeはSPAである。画面上でAPIを発見する場合は次を守る�
 3. 履歴indexの `rowCount === totalCount`、プレイ済みボード数、契約集計の行数・人数を照合する。契約集計行数が全件でも人数が1人ずれることがあるので、差を修正せず `contractGroupIntegrity: MISMATCH` と人数を保存する。`!S2` 等はカードと数えずclaimMarkerに残す。`-32000` は実スコアにしない。`PA` はパスアウトとして扱う。
 4. 認証情報を除いた中間captureから `node scripts/build-tournament-from-capture.mjs <capture-root> <output-root>` で1大会1JSONに変換する。既存のv1 JSONをスキーマ項目へ再投影するときだけ `node scripts/curate-export.mjs <input.json> [output.json]` を使う。索引は `node scripts/build-archive-index.mjs` で作り、索引行と大会詳細の対応を照合する。結果のないイベントは索引のみ残し、理由を報告する。
 5. `node scripts/validate-export.mjs <family-directory>` を3ファミリーに対して実行し、Schemaと52枚一意、action連番、取得済みボード数、契約分布の相互整合性を検証する。「全履歴」では `node scripts/verify-full-history.mjs <output-root>` で索引の全行・詳細ファイル・プレイ済みボードを照合し、結果なしの索引行を列挙する。最終出力に中間captureを含めない。
+6. Portalへの投入を依頼された場合だけ、Portalのブラウザ画面で発行した一時アクセストークンを実行中の `BRIDGE_PORTAL_HISTORY_ACCESS_TOKEN` 環境変数として渡し、`node scripts/upload-to-portal.mjs <output-root>` を実行する。アップロード先は本番 `https://bridge-portal-api.hiro15254.workers.dev` に固定する。トークンをコマンド引数、出力、ソース、ログへ含めない。投入は各JSONを個別に行い、重複は成功として扱う。401、入力エラー、413では停止して再認証またはデータ修正を求め、通信失敗・408・429・5xxだけを最大3回再試行する。
 
 レスポンス本文を取得できないブラウザーでは、UIから取得した範囲を `SPA_UI` として明示する。`NETWORK_RESPONSE` や `MIXED` と表現しない。画面と出力の保持・欠損を報告する依頼では、実大会についてフィールド単位で照合し、未確認と欠損を区別する。
 

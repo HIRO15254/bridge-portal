@@ -91,6 +91,23 @@ input {
 	gap: 8px;
 	margin-top: 12px;
 }
+.portal-settings {
+	padding: 12px;
+	margin-top: 14px;
+	background: #fff;
+	border: 1px solid #d7deea;
+	border-radius: 10px;
+}
+.portal-settings h2 {
+	margin: 0 0 10px;
+	font-size: 14px;
+}
+.portal-settings p {
+	margin: 8px 0 0;
+	font-size: 11px;
+	line-height: 1.5;
+	color: #68768a;
+}
 button {
 	padding: 10px 12px;
 	font-weight: 650;
@@ -129,6 +146,7 @@ button:disabled {
 		color: #aeb9c9;
 	}
 	.status-card,
+	.portal-settings,
 	input,
 	button {
 		background: #202734;

@@ -12,6 +12,11 @@ import {
 	buildTournamentExport,
 } from "../assets/chrome-extension/lib/normalize.js";
 import {
+	normalizePortalApiUrl,
+	PortalUploadError,
+	uploadPortalJson,
+} from "../assets/chrome-extension/lib/portal.js";
+import {
 	ENDPOINTS,
 	parseApiUrl,
 	runtimeFetchExpression,
@@ -39,6 +44,7 @@ assert.deepEqual([...manifest.permissions].sort(), [
 assert.deepEqual(manifest.host_permissions, [
 	"https://*.funbridge.com/*",
 	"https://*.funbridge.net/*",
+	"https://bridge-portal-api.hiro15254.workers.dev/*",
 ]);
 for (const relativePath of [
 	manifest.background.service_worker,
@@ -47,6 +53,7 @@ for (const relativePath of [
 	"popup.css",
 	"lib/exporter.js",
 	"lib/normalize.js",
+	"lib/portal.js",
 	"lib/protocol.js",
 ]) {
 	assert.ok(
@@ -68,6 +75,78 @@ assert.equal(
 	backgroundSource.includes("console."),
 	false,
 	"network responses or credentials must not be logged"
+);
+
+const productionPortalApiUrl =
+	"https://bridge-portal-api.hiro15254.workers.dev";
+assert.equal(
+	normalizePortalApiUrl(productionPortalApiUrl),
+	productionPortalApiUrl
+);
+assert.throws(
+	() =>
+		normalizePortalApiUrl(
+			"https://bridge-portal-api.hiro15254.workers.dev/path"
+		),
+	PortalUploadError
+);
+const uploadCalls = [];
+const duplicateResult = await uploadPortalJson({
+	accessToken: "bpih_test-only",
+	data: { format: "FUNBRIDGE_HISTORY_INDEX", version: 1 },
+	fetchFn: (url, options) => {
+		uploadCalls.push({ options, url });
+		return new Response(JSON.stringify({ duplicate: true }), {
+			headers: { "Content-Type": "application/json" },
+			status: 200,
+		});
+	},
+	portalApiUrl: productionPortalApiUrl,
+});
+assert.equal(duplicateResult.duplicate, true);
+assert.equal(
+	uploadCalls[0].url,
+	`${productionPortalApiUrl}/api/v1/imports/funbridge-json`
+);
+assert.equal(
+	uploadCalls[0].options.headers.Authorization,
+	"Bearer bpih_test-only"
+);
+let retryAttempts = 0;
+const retryDelays = [];
+const retriedResult = await uploadPortalJson({
+	accessToken: "bpih_test-only",
+	data: { format: "FUNBRIDGE_HISTORY_INDEX", version: 1 },
+	fetchFn: () => {
+		retryAttempts += 1;
+		if (retryAttempts === 1) {
+			throw new TypeError("network unavailable");
+		}
+		return new Response(JSON.stringify({ duplicate: false }), {
+			headers: { "Content-Type": "application/json" },
+			status: 201,
+		});
+	},
+	portalApiUrl: productionPortalApiUrl,
+	sleep: (milliseconds) => retryDelays.push(milliseconds),
+});
+assert.equal(retriedResult.duplicate, false);
+assert.equal(retryAttempts, 2);
+assert.deepEqual(retryDelays, [500]);
+await assert.rejects(
+	() =>
+		uploadPortalJson({
+			accessToken: "bpih_test-only",
+			data: { format: "FUNBRIDGE_HISTORY_INDEX", version: 1 },
+			fetchFn: () =>
+				new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
+					headers: { "Content-Type": "application/json" },
+					status: 401,
+				}),
+			portalApiUrl: productionPortalApiUrl,
+		}),
+	(error) =>
+		error instanceof PortalUploadError && error.code === "PORTAL_UNAUTHORIZED"
 );
 
 const root = "https://example.funbridge.net/funbridge-server-ws/rest";
@@ -287,5 +366,5 @@ assert.equal(
 );
 
 console.log(
-	"Chrome extension verification passed: manifest, API boundary, full export flow, and JSON Schema output."
+	"Chrome extension verification passed: manifest, API boundary, Portal upload retry and duplicate behavior, full export flow, and JSON Schema output."
 );

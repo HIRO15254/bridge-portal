@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "Funbridge History Export",
   "version": "1.0.0",
-  "description": "認証済みFunbridgeタブから大会履歴を取得し、JSON Schema準拠のJSONとしてローカル保存します。",
+  "description": "認証済みFunbridgeタブから大会履歴を取得し、JSONをローカル保存またはBridge Portalへ投入します。",
   "permissions": ["activeTab", "debugger", "downloads"],
   "host_permissions": [
     "https://*.funbridge.com/*",
-    "https://*.funbridge.net/*"
+    "https://*.funbridge.net/*",
+    "https://bridge-portal-api.hiro15254.workers.dev/*"
   ],
   "background": {
     "service_worker": "background.js",

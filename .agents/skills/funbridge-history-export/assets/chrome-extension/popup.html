@@ -44,15 +44,34 @@
 			<div class="actions">
 				<button id="connect" type="button">通信を検出</button>
 				<button id="export" type="button" class="primary" disabled>
-					全履歴を保存
+					全履歴をJSONで保存
+				</button>
+				<button id="upload" type="button" class="primary" disabled>
+					全履歴をPortalへ投入
 				</button>
 				<button id="disconnect" type="button" class="secondary" disabled>
 					接続を解除
 				</button>
 			</div>
 
+			<section class="portal-settings">
+				<h2>Bridge Portal</h2>
+				<label for="portal-token">アクセストークン</label>
+				<input
+					id="portal-token"
+					autocomplete="off"
+					placeholder="bpih_…"
+					type="password"
+				>
+				<p>
+					Portalの「API
+					tokens」で発行した12時間有効の値を入力します。拡張機能は保存しません。
+				</p>
+			</section>
+
 			<p class="privacy">
-				認証ヘッダーはメモリ内だけで使用し、保存するJSONやChromeストレージには書き込みません。データはFunbridgeとローカルのダウンロード先以外へ送信しません。
+				FunbridgeとPortalの認証情報はメモリ内だけで使用し、保存するJSONやChromeストレージには書き込みません。Portal投入時だけ、本番Portal
+				APIへ整形済みJSONを送信します。
 			</p>
 		</main>
 		<script type="module" src="popup.js"></script>

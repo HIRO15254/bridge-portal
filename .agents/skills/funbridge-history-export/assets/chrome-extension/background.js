@@ -1,4 +1,5 @@
 import { exportAllHistory } from "./lib/exporter.js";
+import { uploadPortalJson } from "./lib/portal.js";
 import {
 	authorizationFrom,
 	parseApiUrl,
@@ -8,6 +9,8 @@ import {
 } from "./lib/protocol.js";
 
 const protocolVersion = "1.3";
+const productionPortalApiUrl =
+	"https://bridge-portal-api.hiro15254.workers.dev";
 const funbridgePagePattern = /^https:\/\/([^.]+\.)?funbridge\.com\//;
 const chromeApi = globalThis.chrome;
 
@@ -188,7 +191,7 @@ async function downloadJson(path, data) {
 	});
 }
 
-async function startExport(accountId) {
+function collectExport(accountId) {
 	const current = session;
 	if (!(current?.authorization && current.apiRoot)) {
 		throw new Error("認証済みAPIが検出されていません。");
@@ -199,15 +202,19 @@ async function startExport(accountId) {
 		progress: { current: 0, total: 1 },
 		title: "全履歴を取得中",
 	});
+	return exportAllHistory({
+		accountId,
+		onProgress(progress) {
+			publish({ detail: progress.detail, progress });
+		},
+		post: apiPost,
+		templates: current.templates,
+	});
+}
+
+async function startExport(accountId) {
 	try {
-		const result = await exportAllHistory({
-			accountId,
-			onProgress(progress) {
-				publish({ detail: progress.detail, progress });
-			},
-			post: apiPost,
-			templates: current.templates,
-		});
+		const result = await collectExport(accountId);
 		publish({
 			detail: `${result.files.length}ファイルをダウンロードしています。`,
 			progress: { current: 0, total: result.files.length },
@@ -235,13 +242,53 @@ async function startExport(accountId) {
 	}
 }
 
+async function startPortalExport(accountId, accessToken) {
+	try {
+		const result = await collectExport(accountId);
+		publish({
+			detail: `${result.files.length}ファイルをPortalへ投入しています。`,
+			phase: "UPLOADING",
+			progress: { current: 0, total: result.files.length },
+			title: "Portalへ投入中",
+		});
+		let duplicates = 0;
+		for (const [index, file] of result.files.entries()) {
+			const uploaded = await uploadPortalJson({
+				accessToken,
+				data: file.data,
+				portalApiUrl: productionPortalApiUrl,
+			});
+			if (uploaded.duplicate) {
+				duplicates += 1;
+			}
+			publish({
+				detail: `${index + 1}/${result.files.length}ファイルをPortalへ投入しました。`,
+				progress: { current: index + 1, total: result.files.length },
+			});
+		}
+		publish({
+			detail: `${result.summary.tournamentFileCount}大会・${result.summary.boardCount}ボードをPortalへ投入しました。重複: ${duplicates}件。取得不能: ${result.summary.skipped.length}件。`,
+			phase: "READY",
+			progress: undefined,
+			title: "Portal投入完了",
+		});
+	} catch (error) {
+		publish({
+			detail: error instanceof Error ? error.message : String(error),
+			phase: "ERROR",
+			progress: undefined,
+			title: "Portal投入に失敗しました",
+		});
+	}
+}
+
 chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message.type === "GET_STATE") {
 		sendResponse({ ok: true, state: publicState() });
 		return false;
 	}
-	if (message.type === "EXPORT") {
-		if (state.phase === "EXPORTING") {
+	if (message.type === "EXPORT" || message.type === "EXPORT_PORTAL") {
+		if (state.phase === "EXPORTING" || state.phase === "UPLOADING") {
 			sendResponse({
 				error: "すでに取得中です。",
 				ok: false,
@@ -249,7 +296,11 @@ chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			});
 			return false;
 		}
-		startExport(message.accountId).catch((error) => {
+		const start =
+			message.type === "EXPORT_PORTAL"
+				? () => startPortalExport(message.accountId, message.accessToken)
+				: () => startExport(message.accountId);
+		start().catch((error) => {
 			publish({
 				detail: error instanceof Error ? error.message : String(error),
 				phase: "ERROR",

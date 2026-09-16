@@ -3,12 +3,14 @@ const elements = {
 	connect: document.querySelector("#connect"),
 	disconnect: document.querySelector("#disconnect"),
 	export: document.querySelector("#export"),
+	portalToken: document.querySelector("#portal-token"),
 	progress: document.querySelector("#progress"),
 	statusDetail: document.querySelector("#status-detail"),
 	statusDot: document.querySelector("#status-dot"),
 	statusTitle: document.querySelector("#status-title"),
 };
 const chromeApi = globalThis.chrome;
+let lastState;
 
 function statusClass(state, busy, ready) {
 	if (state.phase === "ERROR") {
@@ -21,8 +23,9 @@ function statusClass(state, busy, ready) {
 }
 
 function render(state) {
+	lastState = state;
 	const connected = state.connected === true;
-	const busy = state.phase === "EXPORTING";
+	const busy = state.phase === "EXPORTING" || state.phase === "UPLOADING";
 	const ready = connected && state.authObserved;
 	elements.statusTitle.textContent = state.title;
 	elements.statusDetail.textContent = state.detail;
@@ -30,6 +33,8 @@ function render(state) {
 	elements.connect.disabled = connected;
 	elements.disconnect.disabled = !connected || busy;
 	elements.export.disabled = !ready || busy;
+	elements.upload.disabled =
+		!ready || busy || !elements.portalToken.value.trim();
 	elements.accountId.disabled = busy;
 	if (busy && state.progress) {
 		elements.progress.hidden = false;
@@ -73,6 +78,28 @@ elements.export.addEventListener("click", async () => {
 			title: "取得を開始できません",
 			detail: error.message,
 		});
+	}
+});
+
+elements.upload.addEventListener("click", async () => {
+	try {
+		await send({
+			accessToken: elements.portalToken.value.trim(),
+			accountId: elements.accountId.value.trim(),
+			type: "EXPORT_PORTAL",
+		});
+	} catch (error) {
+		render({
+			phase: "ERROR",
+			title: "Portal投入を開始できません",
+			detail: error.message,
+		});
+	}
+});
+
+elements.portalToken.addEventListener("input", () => {
+	if (lastState) {
+		render(lastState);
 	}
 });
 
