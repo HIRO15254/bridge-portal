@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Curated Funbridge tournament export",
+  "description": "Bridge Portal compatible core with only history, deal, result and contract-distribution fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "exportedAt",
+    "source",
+    "tournament",
+    "standingsCoverage",
+    "boards"
+  ],
+  "properties": {
+    "format": { "const": "FUNBRIDGE_EXPORT" },
+    "formatVersion": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "captureMode",
+        "locale",
+        "capturedAt",
+        "sourceTournamentId"
+      ],
+      "properties": {
+        "platform": { "const": "FUNBRIDGE_WEB" },
+        "captureMode": { "enum": ["NETWORK_RESPONSE", "MIXED", "SPA_UI"] },
+        "locale": { "type": "string", "minLength": 2 },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "sourceTournamentId": { "$ref": "#/$defs/id" },
+        "sourceParentTournamentId": { "$ref": "#/$defs/id" },
+        "warnings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "tournament": { "$ref": "#/$defs/tournament" },
+    "standingsCoverage": { "$ref": "#/$defs/coverage" },
+    "standings": { "type": "array", "items": { "$ref": "#/$defs/standing" } },
+    "boards": { "type": "array", "items": { "$ref": "#/$defs/board" } },
+    "partialBoards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/partialBoard" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "seat": { "enum": ["N", "E", "S", "W"] },
+    "scoreType": { "enum": ["MP", "IMP"] },
+    "card": { "type": "string", "pattern": "^[SHDC][AKQJT2-9]$" },
+    "hand": {
+      "type": "string",
+      "pattern": "^[AKQJT2-9]*\\.[AKQJT2-9]*\\.[AKQJT2-9]*\\.[AKQJT2-9]*$"
+    },
+    "contract": {
+      "type": "string",
+      "pattern": "^[1-7](?:[SHDC]|NT)(?:XX|X)?$"
+    },
+    "tournament": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "family",
+        "name",
+        "funbridgeId",
+        "playedAt",
+        "completion",
+        "boardCount",
+        "scoreType"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "family": { "enum": ["BP_CIRCUIT", "SERIES", "DAILY"] },
+        "name": { "type": "string", "minLength": 1 },
+        "funbridgeId": { "$ref": "#/$defs/id" },
+        "playedAt": { "type": "string", "format": "date-time" },
+        "lastPlayedAt": { "type": "string", "format": "date-time" },
+        "completion": { "enum": ["COMPLETED", "IN_PROGRESS", "ABANDONED"] },
+        "boardCount": { "type": "integer", "minimum": 0 },
+        "playedBoardCount": { "type": "integer", "minimum": 0 },
+        "scoreType": { "$ref": "#/$defs/scoreType" },
+        "score": { "type": "number" },
+        "rank": { "type": "integer", "minimum": 1 },
+        "participantCount": { "type": "integer", "minimum": 1 },
+        "bpCircuit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level"],
+          "properties": {
+            "level": { "type": "string", "minLength": 1 },
+            "multiplier": { "type": "number", "exclusiveMinimum": 0 },
+            "awarded": { "type": "number", "minimum": 0 },
+            "eventType": { "type": "string", "minLength": 1 },
+            "kind": { "enum": ["FEDERAL", "BIC", "KNOCKOUT"] },
+            "parentEventId": { "$ref": "#/$defs/id" },
+            "knockoutRounds": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/knockoutRound" }
+            }
+          }
+        },
+        "series": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "period", "outcome"],
+          "properties": {
+            "level": { "type": "string", "minLength": 1 },
+            "period": { "type": "string", "minLength": 1 },
+            "periodStartAt": { "type": "string", "format": "date-time" },
+            "periodEndAt": { "type": "string", "format": "date-time" },
+            "outcome": {
+              "enum": ["PROMOTED", "MAINTAINED", "RELEGATED", "PENDING"]
+            }
+          }
+        },
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["region"],
+          "properties": {
+            "region": { "type": "string", "minLength": 1 },
+            "endAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "family": { "const": "BP_CIRCUIT" } } },
+          "then": { "required": ["bpCircuit"] }
+        },
+        {
+          "if": { "properties": { "family": { "const": "SERIES" } } },
+          "then": { "required": ["series"] }
+        },
+        {
+          "if": { "properties": { "family": { "const": "DAILY" } } },
+          "then": { "required": ["daily"] }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "totalCount", "rowCount"],
+      "properties": {
+        "scope": { "enum": ["NONE", "VISIBLE_WINDOW", "FULL"] },
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "rowCount": { "type": "integer", "minimum": 0 },
+        "rankFrom": { "type": "integer", "minimum": 1 },
+        "rankTo": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "standing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "player", "score", "scoreType"],
+      "properties": {
+        "rank": { "type": "integer", "minimum": 1 },
+        "player": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["displayName"],
+          "properties": {
+            "displayName": { "type": "string", "minLength": 1 },
+            "funbridgeId": { "$ref": "#/$defs/id" },
+            "countryCode": { "type": "string", "pattern": "^[a-zA-Z]{2}$" }
+          }
+        },
+        "score": { "type": "number" },
+        "scoreType": { "$ref": "#/$defs/scoreType" },
+        "bridgePoints": { "type": "number", "minimum": 0 }
+      }
+    },
+    "hands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["N", "E", "S", "W"],
+      "properties": {
+        "N": { "$ref": "#/$defs/hand" },
+        "E": { "$ref": "#/$defs/hand" },
+        "S": { "$ref": "#/$defs/hand" },
+        "W": { "$ref": "#/$defs/hand" }
+      }
+    },
+    "boardSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceDealId"],
+      "properties": {
+        "sourceDealId": { "$ref": "#/$defs/id" },
+        "sourceGameId": { "$ref": "#/$defs/id" },
+        "sourceMatchId": { "$ref": "#/$defs/id" },
+        "claimMarker": {
+          "type": "string",
+          "pattern": "^![NESW](?:1[0-3]|[0-9])$"
+        }
+      }
+    },
+    "auctionAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "seat", "call"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "seat": { "$ref": "#/$defs/seat" },
+        "call": {
+          "type": "string",
+          "pattern": "^(?:PASS|X|XX|[1-7](?:[SHDC]|NT))$"
+        },
+        "alert": { "type": "string", "minLength": 1 }
+      }
+    },
+    "playAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "trickNumber", "seat", "card"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "trickNumber": { "type": "integer", "minimum": 1, "maximum": 13 },
+        "seat": { "$ref": "#/$defs/seat" },
+        "card": { "$ref": "#/$defs/card" }
+      }
+    },
+    "contractGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rank",
+        "contract",
+        "declarer",
+        "tricksTaken",
+        "rawScore",
+        "score",
+        "playerCount"
+      ],
+      "properties": {
+        "rank": { "type": "integer", "minimum": 1 },
+        "contract": { "$ref": "#/$defs/contract" },
+        "declarer": { "$ref": "#/$defs/seat" },
+        "tricksTaken": { "type": "integer", "minimum": 0, "maximum": 13 },
+        "rawScore": { "type": "number" },
+        "score": { "type": "number" },
+        "playerCount": { "type": "integer", "minimum": 1 },
+        "sourceContract": { "type": "string", "minLength": 1 }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "participantCount", "score", "scoreType"],
+      "properties": {
+        "rank": { "type": "integer", "minimum": 1 },
+        "participantCount": { "type": "integer", "minimum": 1 },
+        "score": { "type": "number" },
+        "scoreType": { "$ref": "#/$defs/scoreType" },
+        "rawScore": { "type": "number" },
+        "tricksTaken": { "type": "integer", "minimum": 0, "maximum": 13 },
+        "lead": { "$ref": "#/$defs/card" },
+        "contractGroups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractGroup" }
+        },
+        "unclassifiedPlayerCount": { "type": "integer", "minimum": 0 },
+        "passedOutPlayerCount": { "type": "integer", "minimum": 0 },
+        "contractGroupCoverage": { "enum": ["NONE", "VISIBLE_WINDOW", "FULL"] },
+        "contractGroupIntegrity": {
+          "enum": ["RECONCILED", "MISMATCH", "UNKNOWN"]
+        },
+        "contractGroupRows": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rowCount", "participantSum"],
+          "properties": {
+            "rowCount": { "type": "integer", "minimum": 0 },
+            "sourceTotalCount": { "type": "integer", "minimum": 1 },
+            "participantSum": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "knockoutRound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roundNumber", "sourceMatchId", "status", "boardCount"],
+      "properties": {
+        "roundNumber": { "type": "integer", "minimum": 1 },
+        "sourceMatchId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["FINISHED", "BYE", "IN_PROGRESS"] },
+        "boardCount": { "type": "integer", "minimum": 0 },
+        "opponentPlayerId": { "$ref": "#/$defs/id" },
+        "heroScore": { "type": "number" },
+        "opponentScore": { "type": "number" },
+        "winnerPlayerId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "matchComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceMatchId", "roundNumber", "impDelta"],
+      "properties": {
+        "sourceMatchId": { "$ref": "#/$defs/id" },
+        "roundNumber": { "type": "integer", "minimum": 1 },
+        "impDelta": { "type": "number" },
+        "heroRawScore": { "type": "number" },
+        "opponentRawScore": { "type": "number" },
+        "opponentContract": { "$ref": "#/$defs/contract" },
+        "opponentTricksTaken": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 13
+        }
+      }
+    },
+    "board": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boardNumber",
+        "dealer",
+        "vulnerability",
+        "hands",
+        "contract",
+        "declarer",
+        "result",
+        "score",
+        "auction",
+        "play",
+        "source",
+        "comparison"
+      ],
+      "properties": {
+        "boardNumber": { "type": "integer", "minimum": 1 },
+        "dealer": { "$ref": "#/$defs/seat" },
+        "vulnerability": { "enum": ["None", "NS", "EW", "Both"] },
+        "hands": { "$ref": "#/$defs/hands" },
+        "heroSeat": { "$ref": "#/$defs/seat" },
+        "contract": { "$ref": "#/$defs/contract" },
+        "declarer": { "$ref": "#/$defs/seat" },
+        "result": { "type": "integer", "minimum": -13, "maximum": 13 },
+        "score": { "type": "number" },
+        "auction": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/auctionAction" }
+        },
+        "play": {
+          "type": "array",
+          "maxItems": 52,
+          "items": { "$ref": "#/$defs/playAction" }
+        },
+        "source": { "$ref": "#/$defs/boardSource" },
+        "comparison": { "$ref": "#/$defs/comparison" }
+      }
+    },
+    "partialBoard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boardNumber",
+        "status",
+        "dealer",
+        "vulnerability",
+        "hands",
+        "source"
+      ],
+      "properties": {
+        "boardNumber": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["NO_CONTRACT_OR_PLAY", "NO_PLAY", "PASSED_OUT"] },
+        "dealer": { "$ref": "#/$defs/seat" },
+        "vulnerability": { "enum": ["None", "NS", "EW", "Both"] },
+        "hands": { "$ref": "#/$defs/hands" },
+        "contract": { "$ref": "#/$defs/contract" },
+        "declarer": { "$ref": "#/$defs/seat" },
+        "result": { "type": "integer", "minimum": -13, "maximum": 13 },
+        "score": { "type": "number" },
+        "source": { "$ref": "#/$defs/boardSource" },
+        "comparison": { "$ref": "#/$defs/comparison" },
+        "matchComparison": { "$ref": "#/$defs/matchComparison" },
+        "auction": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/auctionAction" }
+        },
+        "play": {
+          "type": "array",
+          "maxItems": 52,
+          "items": { "$ref": "#/$defs/playAction" }
+        }
+      }
+    }
+  }
+}

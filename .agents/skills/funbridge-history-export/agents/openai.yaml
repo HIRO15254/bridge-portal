@@ -1,0 +1,4 @@
+interface:
+  display_name: "Funbridge履歴取得"
+  short_description: "Funbridge大会・全ボード・比較結果をJSON保存"
+  default_prompt: "Use $funbridge-history-export to export my Funbridge tournament history with complete boards and player summaries."

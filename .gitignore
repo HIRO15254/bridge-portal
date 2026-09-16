@@ -53,3 +53,6 @@ playwright-report
 .cache
 tmp
 temp
+
+# Local Funbridge account history exports
+funbridge-export/
