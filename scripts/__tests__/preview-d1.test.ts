@@ -1,10 +1,12 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { Miniflare } from "miniflare";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+	extractPreviewUserData,
 	prepareDataDump,
 	renderTriggerSql,
 	restorePreviewData,
@@ -21,6 +23,77 @@ afterEach(async () => {
 });
 
 describe("preview D1 data restoration", () => {
+	it("extracts only the selected user's complete data graph", () => {
+		const database = new DatabaseSync(":memory:");
+		try {
+			database.exec(`
+				CREATE TABLE user (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL);
+				CREATE TABLE account (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, password TEXT);
+				CREATE TABLE session (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, token TEXT NOT NULL);
+				CREATE TABLE verification (id TEXT PRIMARY KEY, identifier TEXT NOT NULL);
+				CREATE TABLE bridge_system (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL);
+				CREATE TABLE system_draft (id TEXT PRIMARY KEY, system_id TEXT NOT NULL);
+				CREATE TABLE system_version (id TEXT PRIMARY KEY, system_id TEXT NOT NULL);
+				CREATE TABLE tournament (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+				CREATE TABLE import_revision (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, r2_key TEXT NOT NULL);
+				CREATE TABLE history_index (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+				CREATE TABLE history_index_entry (id TEXT PRIMARY KEY, history_index_id TEXT NOT NULL);
+				CREATE TABLE tournament_revision (id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL);
+				CREATE TABLE deal (id TEXT PRIMARY KEY, deal_hash TEXT NOT NULL);
+				CREATE TABLE board_attempt (id TEXT PRIMARY KEY, tournament_revision_id TEXT NOT NULL, deal_id TEXT NOT NULL);
+				CREATE TABLE auction_call (id TEXT PRIMARY KEY, board_attempt_id TEXT NOT NULL);
+				CREATE TABLE play_action (id TEXT PRIMARY KEY, board_attempt_id TEXT NOT NULL);
+				CREATE TABLE board_score (id TEXT PRIMARY KEY, board_attempt_id TEXT NOT NULL);
+				CREATE TABLE evaluation_run (id TEXT PRIMARY KEY, board_attempt_id TEXT NOT NULL);
+				CREATE TABLE rule_evaluation (id TEXT PRIMARY KEY, evaluation_run_id TEXT NOT NULL);
+				CREATE TABLE rule_evaluation_override (id TEXT PRIMARY KEY, rule_evaluation_id TEXT NOT NULL, corrected_by_user_id TEXT NOT NULL);
+				CREATE TABLE double_dummy_result (id TEXT PRIMARY KEY, board_attempt_id TEXT NOT NULL);
+				INSERT INTO user VALUES ('developer', 'developer@example.test', 'Developer'), ('other', 'other@example.test', 'Other');
+				INSERT INTO account VALUES ('developer-account', 'developer', 'hash'), ('other-account', 'other', 'other-hash');
+				INSERT INTO session VALUES ('developer-session', 'developer', 'secret-token'), ('other-session', 'other', 'other-token');
+				INSERT INTO verification VALUES ('developer-verification', 'developer@example.test');
+				INSERT INTO bridge_system VALUES ('developer-system', 'developer', 'System'), ('other-system', 'other', 'Other system');
+				INSERT INTO system_draft VALUES ('developer-draft', 'developer-system'), ('other-draft', 'other-system');
+				INSERT INTO system_version VALUES ('developer-version', 'developer-system'), ('other-version', 'other-system');
+				INSERT INTO tournament VALUES ('developer-tournament', 'developer'), ('other-tournament', 'other');
+				INSERT INTO import_revision VALUES ('developer-import', 'developer', 'developer/daily/source.json'), ('other-import', 'other', 'other/daily/source.json');
+				INSERT INTO history_index VALUES ('developer-index', 'developer'), ('other-index', 'other');
+				INSERT INTO history_index_entry VALUES ('developer-entry', 'developer-index'), ('other-entry', 'other-index');
+				INSERT INTO tournament_revision VALUES ('developer-revision', 'developer-tournament'), ('other-revision', 'other-tournament');
+				INSERT INTO deal VALUES ('developer-deal', 'developer-hash'), ('other-deal', 'other-hash');
+				INSERT INTO board_attempt VALUES ('developer-board', 'developer-revision', 'developer-deal'), ('other-board', 'other-revision', 'other-deal');
+				INSERT INTO auction_call VALUES ('developer-auction', 'developer-board'), ('other-auction', 'other-board');
+				INSERT INTO play_action VALUES ('developer-play', 'developer-board'), ('other-play', 'other-board');
+				INSERT INTO board_score VALUES ('developer-score', 'developer-board'), ('other-score', 'other-board');
+				INSERT INTO evaluation_run VALUES ('developer-run', 'developer-board'), ('other-run', 'other-board');
+				INSERT INTO rule_evaluation VALUES ('developer-evaluation', 'developer-run'), ('other-evaluation', 'other-run');
+				INSERT INTO rule_evaluation_override VALUES ('developer-override', 'developer-evaluation', 'developer'), ('other-override', 'other-evaluation', 'other');
+				INSERT INTO double_dummy_result VALUES ('developer-double-dummy', 'developer-board'), ('other-double-dummy', 'other-board');
+			`);
+
+			const preview = extractPreviewUserData(
+				{
+					query(sql) {
+						return {
+							all: (...parameters) =>
+								database.prepare(sql).all(...(parameters as SQLInputValue[])),
+						};
+					},
+				},
+				"developer@example.test"
+			);
+
+			expect(preview.r2Keys).toEqual(["developer/daily/source.json"]);
+			expect(preview.sql).toContain("developer-account");
+			expect(preview.sql).toContain("developer-double-dummy");
+			expect(preview.sql).not.toContain("other-account");
+			expect(preview.sql).not.toContain("developer-session");
+			expect(preview.sql).not.toContain("developer-verification");
+		} finally {
+			database.close();
+		}
+	});
+
 	it("imports related rows without firing production triggers and rearms them", async () => {
 		const miniflare = new Miniflare({
 			cf: false,
