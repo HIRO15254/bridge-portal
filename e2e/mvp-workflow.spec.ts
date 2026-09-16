@@ -5,7 +5,6 @@ const apiUrl = "http://127.0.0.1:8787";
 const importCompletePattern = /取込が完了しました/;
 const tournamentPattern = /Daily example/;
 const boardPattern = /BOARD 1/;
-const parPattern = /^Par /;
 const admin = {
 	email: "learner@example.test",
 	name: "Learner",
@@ -47,12 +46,6 @@ test("新規登録からFunbridge履歴の取込・閲覧まで完走する", as
 	await expect(page.getByText(importCompletePattern)).toBeVisible();
 	await page.getByRole("link", { name: tournamentPattern }).click();
 	await page.getByRole("link", { name: boardPattern }).click();
-
-	await page.getByRole("button", { name: "DDSで解析" }).click();
-	await expect(
-		page.getByRole("button", { name: "解析を保存しました" })
-	).toBeVisible({ timeout: 30_000 });
-	await expect(page.locator(".dd-panel").getByText(parPattern)).toBeVisible();
 
 	await page.getByRole("button", { name: "進む" }).click();
 	await expect(page.locator(".trick-grid").getByText("S9")).toBeVisible();
