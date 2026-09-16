@@ -53,7 +53,7 @@ jobs:
             /tmp/pages-deployments.json)
           for id in $deployments; do
             delete_status=$(curl -s -o /tmp/pages-delete.json -w '%{http_code}' -X DELETE \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES}/deployments/${id}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES}/deployments/${id}?force=true" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
             test "$delete_status" = 200 -o "$delete_status" = 404 || {
               cat /tmp/pages-delete.json
