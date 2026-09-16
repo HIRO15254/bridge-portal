@@ -8,6 +8,7 @@ import {
 	boardScore,
 	createDb,
 	deal,
+	deviceAuthorization,
 	doubleDummyResult,
 	historyIndex,
 	historyIndexEntry,
@@ -34,9 +35,12 @@ import { cors } from "hono/cors";
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 const IMPORT_TOKEN_LIFETIME_MS = 12 * 60 * 60 * 1000;
+const DEVICE_AUTHORIZATION_LIFETIME_MS = 10 * 60 * 1000;
+const DEVICE_AUTHORIZATION_INTERVAL_SECONDS = 2;
 const historyImportContentType = "application/json";
 const seats = ["N", "E", "S", "W"] as const;
 const bearerPattern = /^Bearer\s+/i;
+const userCodePattern = /^[A-Z2-9]{8}$/;
 
 function secret(env: Env, name: string): string | undefined {
 	const value = Reflect.get(env, name);
@@ -86,6 +90,21 @@ function randomToken(): string {
 	return `bpih_${[...crypto.getRandomValues(new Uint8Array(32))]
 		.map((byte) => byte.toString(16).padStart(2, "0"))
 		.join("")}`;
+}
+
+function randomUserCode(): string {
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	return [...crypto.getRandomValues(new Uint8Array(8))]
+		.map((byte) => alphabet[byte % alphabet.length])
+		.join("");
+}
+
+function normalizedUserCode(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+	const code = value.replaceAll("-", "").trim().toUpperCase();
+	return userCodePattern.test(code) ? code : undefined;
 }
 
 interface ImportResponse {
@@ -863,6 +882,112 @@ app.post("/api/v1/import-tokens", async (context) => {
 			expiresAt,
 		});
 	return context.json({ accessToken, expiresAt: expiresAt.toISOString() }, 201);
+});
+
+app.post("/api/v1/device-authorizations", async (context) => {
+	const deviceCode = randomToken();
+	const userCode = randomUserCode();
+	const expiresAt = new Date(Date.now() + DEVICE_AUTHORIZATION_LIFETIME_MS);
+	await createDb(context.env.DB)
+		.insert(deviceAuthorization)
+		.values({
+			id: crypto.randomUUID(),
+			deviceCodeHash: await sha256(deviceCode),
+			userCodeHash: await sha256(userCode),
+			expiresAt,
+		});
+	const verificationUrl = new URL(
+		"/device-authorizations",
+		context.env.CORS_ORIGIN
+	);
+	verificationUrl.searchParams.set("user_code", userCode);
+	return context.json(
+		{
+			deviceCode,
+			expiresIn: DEVICE_AUTHORIZATION_LIFETIME_MS / 1000,
+			interval: DEVICE_AUTHORIZATION_INTERVAL_SECONDS,
+			userCode,
+			verificationUri: `${verificationUrl.origin}${verificationUrl.pathname}`,
+			verificationUriComplete: verificationUrl.toString(),
+		},
+		201
+	);
+});
+
+app.post("/api/v1/device-authorizations/approve", async (context) => {
+	const auth = authFor(context.env);
+	const session = await auth.api.getSession({
+		headers: context.req.raw.headers,
+	});
+	if (!session) {
+		return context.json({ error: "UNAUTHORIZED" }, 401);
+	}
+	const body = await context.req
+		.json<{ userCode?: unknown }>()
+		.catch((): { userCode?: unknown } => ({}));
+	const userCode = normalizedUserCode(body.userCode);
+	if (!userCode) {
+		return context.json({ error: "INVALID_USER_CODE" }, 400);
+	}
+	const db = createDb(context.env.DB);
+	const authorization = await db.query.deviceAuthorization.findFirst({
+		where: and(
+			eq(deviceAuthorization.userCodeHash, await sha256(userCode)),
+			gt(deviceAuthorization.expiresAt, new Date())
+		),
+	});
+	if (!authorization) {
+		return context.json({ error: "DEVICE_AUTHORIZATION_EXPIRED" }, 410);
+	}
+	if (authorization.status !== "PENDING") {
+		return context.json({ error: "DEVICE_AUTHORIZATION_ALREADY_USED" }, 409);
+	}
+	await db.insert(apiToken).values({
+		id: crypto.randomUUID(),
+		userId: session.user.id,
+		label: "Browser device authorization",
+		tokenHash: authorization.deviceCodeHash,
+		expiresAt: new Date(Date.now() + IMPORT_TOKEN_LIFETIME_MS),
+	});
+	await db
+		.update(deviceAuthorization)
+		.set({ status: "AUTHORIZED", userId: session.user.id })
+		.where(eq(deviceAuthorization.id, authorization.id));
+	return context.json({ approved: true });
+});
+
+app.post("/api/v1/device-authorizations/token", async (context) => {
+	const body = await context.req
+		.json<{ deviceCode?: unknown }>()
+		.catch((): { deviceCode?: unknown } => ({}));
+	if (!(typeof body.deviceCode === "string" && body.deviceCode.trim())) {
+		return context.json({ error: "INVALID_DEVICE_CODE" }, 400);
+	}
+	const db = createDb(context.env.DB);
+	const authorization = await db.query.deviceAuthorization.findFirst({
+		where: and(
+			eq(deviceAuthorization.deviceCodeHash, await sha256(body.deviceCode)),
+			gt(deviceAuthorization.expiresAt, new Date())
+		),
+	});
+	if (!authorization) {
+		return context.json({ error: "DEVICE_AUTHORIZATION_EXPIRED" }, 410);
+	}
+	if (authorization.status === "PENDING") {
+		return context.json({ error: "AUTHORIZATION_PENDING" }, 428);
+	}
+	if (authorization.status === "CONSUMED") {
+		return context.json({ error: "DEVICE_AUTHORIZATION_CONSUMED" }, 409);
+	}
+	await db
+		.update(deviceAuthorization)
+		.set({ status: "CONSUMED" })
+		.where(eq(deviceAuthorization.id, authorization.id));
+	return context.json({
+		accessToken: body.deviceCode,
+		expiresIn: IMPORT_TOKEN_LIFETIME_MS / 1000,
+		tokenType: "Bearer",
+	});
 });
 
 app.get("/api/boards/:id/export.pbn", async (context) => {

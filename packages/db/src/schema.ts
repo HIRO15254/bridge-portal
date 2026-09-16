@@ -103,6 +103,28 @@ export const apiToken = sqliteTable(
 	(table) => [index("api_token_user_id_idx").on(table.userId)]
 );
 
+export const deviceAuthorization = sqliteTable(
+	"device_authorization",
+	{
+		id: text("id").primaryKey(),
+		deviceCodeHash: text("device_code_hash").notNull().unique(),
+		userCodeHash: text("user_code_hash").notNull().unique(),
+		userId: text("user_id").references(() => user.id, {
+			onDelete: "cascade",
+		}),
+		status: text("status", {
+			enum: ["PENDING", "AUTHORIZED", "CONSUMED"],
+		})
+			.notNull()
+			.default("PENDING"),
+		expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.default(sql`(unixepoch())`)
+			.notNull(),
+	},
+	(table) => [index("device_authorization_expiry_idx").on(table.expiresAt)]
+);
+
 export const bridgeSystem = sqliteTable(
 	"bridge_system",
 	{
@@ -493,6 +515,7 @@ export const doubleDummyResult = sqliteTable(
 
 export const userRelations = relations(user, ({ many }) => ({
 	apiTokens: many(apiToken),
+	deviceAuthorizations: many(deviceAuthorization),
 	sessions: many(session),
 	systems: many(bridgeSystem),
 	tournaments: many(tournament),
@@ -501,6 +524,15 @@ export const userRelations = relations(user, ({ many }) => ({
 export const apiTokenRelations = relations(apiToken, ({ one }) => ({
 	user: one(user, { fields: [apiToken.userId], references: [user.id] }),
 }));
+export const deviceAuthorizationRelations = relations(
+	deviceAuthorization,
+	({ one }) => ({
+		user: one(user, {
+			fields: [deviceAuthorization.userId],
+			references: [user.id],
+		}),
+	})
+);
 export const historyIndexRelations = relations(
 	historyIndex,
 	({ one, many }) => ({
@@ -635,6 +667,8 @@ export const schema = {
 	boardScoreRelations,
 	bridgeSystem,
 	deal,
+	deviceAuthorization,
+	deviceAuthorizationRelations,
 	doubleDummyResult,
 	evaluationRun,
 	evaluationRunRelations,

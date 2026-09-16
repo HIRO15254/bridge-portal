@@ -28,6 +28,7 @@ async function migratedDatabase(): Promise<D1Database> {
 	await database.exec(`
 		CREATE TABLE user (id text PRIMARY KEY NOT NULL, name text NOT NULL, email text NOT NULL, singleton_key integer NOT NULL DEFAULT 1);
 		CREATE TABLE api_token (id text PRIMARY KEY NOT NULL, user_id text NOT NULL, label text NOT NULL, token_hash text NOT NULL UNIQUE, expires_at integer NOT NULL, created_at integer NOT NULL DEFAULT (unixepoch()));
+		CREATE TABLE device_authorization (id text PRIMARY KEY NOT NULL, device_code_hash text NOT NULL UNIQUE, user_code_hash text NOT NULL UNIQUE, user_id text, status text NOT NULL DEFAULT 'PENDING', expires_at integer NOT NULL, created_at integer NOT NULL DEFAULT (unixepoch()));
 		CREATE TABLE import_revision (id text PRIMARY KEY NOT NULL, user_id text NOT NULL, tournament_id text, sha256 text NOT NULL, r2_key text NOT NULL, status text NOT NULL, warnings text NOT NULL, created_at integer NOT NULL DEFAULT (unixepoch()));
 		CREATE TABLE history_index (id text PRIMARY KEY NOT NULL, import_revision_id text NOT NULL UNIQUE, user_id text NOT NULL, family text NOT NULL, captured_at integer NOT NULL, capture_mode text NOT NULL, locale text NOT NULL, coverage text NOT NULL, created_at integer NOT NULL DEFAULT (unixepoch()));
 		CREATE TABLE history_index_entry (id text PRIMARY KEY NOT NULL, history_index_id text NOT NULL, source_tournament_id text NOT NULL, title text NOT NULL, played_at integer, registered_player_count integer NOT NULL, in_progress integer NOT NULL, rank integer, score real, score_type text, board_count integer, played_board_count integer, metadata text NOT NULL);
@@ -133,6 +134,73 @@ describe("worker", () => {
 
 			expect(response.status).toBe(401);
 			await expect(response.json()).resolves.toEqual({ error: "UNAUTHORIZED" });
+		});
+
+		it("waits for browser approval before returning a device token", async () => {
+			const started = await app.request(
+				"/api/v1/device-authorizations",
+				{ method: "POST" },
+				apiBindings
+			);
+			expect(started.status).toBe(201);
+			const authorization = (await started.json()) as {
+				deviceCode: string;
+				userCode: string;
+			};
+			const pending = await app.request(
+				"/api/v1/device-authorizations/token",
+				{
+					body: JSON.stringify({ deviceCode: authorization.deviceCode }),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+				apiBindings
+			);
+			expect(pending.status).toBe(428);
+			await apiBindings.DB.prepare(
+				"UPDATE device_authorization SET status = 'AUTHORIZED', user_id = ? WHERE user_code_hash = ?"
+			)
+				.bind("portal-user", await sha256(authorization.userCode))
+				.run();
+			await apiBindings.DB.prepare(
+				"INSERT INTO api_token (id, user_id, label, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)"
+			)
+				.bind(
+					"device-token",
+					"portal-user",
+					"Browser device authorization",
+					await sha256(authorization.deviceCode),
+					Math.floor(Date.now() / 1000) + 3600
+				)
+				.run();
+			const authorized = await app.request(
+				"/api/v1/device-authorizations/token",
+				{
+					body: JSON.stringify({ deviceCode: authorization.deviceCode }),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+				apiBindings
+			);
+			expect(authorized.status).toBe(200);
+			await expect(authorized.json()).resolves.toMatchObject({
+				accessToken: authorization.deviceCode,
+				tokenType: "Bearer",
+			});
+		});
+
+		it("requires a Portal browser session to approve a device code", async () => {
+			const response = await app.request(
+				"/api/v1/device-authorizations/approve",
+				{
+					body: JSON.stringify({ userCode: "ABCDEFGH" }),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+				apiBindings
+			);
+
+			expect(response.status).toBe(401);
 		});
 
 		it("rejects malformed history data after authenticating the caller", async () => {

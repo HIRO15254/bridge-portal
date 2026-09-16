@@ -7,18 +7,20 @@ Bridge Portal に投入するサーバー間 API です。既存のブラウザ�
 ## ブラウザ認証と認可
 
 AWS SSO と同様に、投入元へ共有の Worker Secret を配る方式にはしません。
-まず Portal にブラウザでログインし、サイドバーの **API tokens** を開いて
-「アクセストークンを発行」を選びます。表示される値は一度だけです。
+Skill と拡張機能は AWS SSO と同様の端末認可フローを使います。端末側で短い
+認証コードと Portal のURLを表示し、Portalにブラウザでログインした利用者が承認します。
+端末は承認を待機してから、履歴投入だけを許可する短命のBearerトークンを取得します。
 
 発行された Bearer トークンは履歴投入だけを許可し、発行したログインアカウントに
 自動的に紐付きます。リクエストからユーザー ID を指定することはできません。トークンは
 12 時間で失効するため、失効後はブラウザで再認証して新しい値を発行してください。
 
-画面はログイン済み Cookie を使って内部の `POST /api/v1/import-tokens` を呼び、
-`{ "accessToken": "…", "expiresAt": "…" }` を一度だけ受け取ります。この発行 API は
-Cookie のない呼び出しには `401 { "error": "UNAUTHORIZED" }`、空または 100 文字超の
-ラベルには `400 { "error": "INVALID_TOKEN_LABEL" }` を返します。外部ツールはこの発行
-API へパスワードを送らず、必ずブラウザ画面を使ってください。
+端末認可は `POST /api/v1/device-authorizations` で開始し、10分有効の `deviceCode` と
+`userCode` を返します。ブラウザはログイン済みCookieで
+`POST /api/v1/device-authorizations/approve` を呼びます。端末は
+`POST /api/v1/device-authorizations/token` を2秒ごとに確認し、承認前は
+`428 { "error": "AUTHORIZATION_PENDING" }`、承認後はBearerトークンを受け取ります。
+ユーザーはパスワードや長いトークンを端末へコピーしません。
 
 トークンは OS の認証情報ストアなど安全な保存先に置き、ソース、`.env`、エクスポート
 JSON、ログ、共有チャンネルには保存しません。漏えいが疑われる場合は、失効を待たず
@@ -29,18 +31,18 @@ JSON、ログ、共有チャンネルには保存しません。漏えいが疑�
 どちらも本番 API `https://bridge-portal-api.hiro15254.workers.dev` だけへ投入します。
 Portal の **API tokens** 画面で発行した値を、実行中だけ渡してください。
 
-Skill でローカルに生成済みの全履歴を投入するには、次の環境変数を設定してから実行
-します。トークンをコマンド引数へ渡したり、ファイルへ書き込んだりしません。
+Skill でローカルに生成済みの全履歴を投入するには、次を実行します。表示されたURLを
+ブラウザで開いて認証コードを承認します。トークンをコマンド引数・環境変数・ファイルへ
+渡しません。
 
 ```powershell
-$env:BRIDGE_PORTAL_HISTORY_ACCESS_TOKEN = "ブラウザで発行した値"
 node .agents/skills/funbridge-history-export/scripts/upload-to-portal.mjs funbridge-export
 ```
 
 Chrome 拡張機能では、Funbridge の認証済み通信を検出して「取得準備完了」にした後、
-同じ画面の **Bridge Portal** にトークンを貼り付け、「全履歴をPortalへ投入」を選びます。
-トークンはポップアップと service worker の実行中メモリーだけに保持され、Chrome
-ストレージ、ダウンロード、ログには保存されません。
+**Portalに接続** を選びます。Portalの承認画面が開くため、ログインして短いコードを承認
+したら「全履歴をPortalへ投入」を選びます。トークンはservice workerの実行中メモリーだけに
+保持され、Chromeストレージ、ダウンロード、ログには保存されません。
 
 各 JSON は個別に送信されます。同じアカウントが同じ本文を再送すると `duplicate: true`
 として成功扱いになり、新しい履歴リビジョンは作成されません。ネットワークエラーと
