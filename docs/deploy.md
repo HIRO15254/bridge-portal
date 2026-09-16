@@ -15,7 +15,7 @@ Copy the production D1 UUID into `apps/server/wrangler.jsonc`; never commit the 
 - `PRODUCTION_WEB_URL` (the exact allowed CORS origin)
 - `PRODUCTION_API_URL` (the Worker base URL embedded in the web build)
 
-Configure `CLOUDFLARE_API_TOKEN` and `BETTER_AUTH_SECRET` as GitHub Actions secrets. The Cloudflare token needs the account permissions required to manage Workers Scripts, Pages, D1, and R2. Set the same `BETTER_AUTH_SECRET` on the production Worker with `wrangler secret put`; never place it in `wrangler.jsonc`.
+Configure `CLOUDFLARE_API_TOKEN`, `BETTER_AUTH_SECRET`, and `PREVIEW_DEVELOPER_EMAIL` as GitHub Actions secrets. Set `PREVIEW_DEVELOPER_EMAIL` to the production email address of the development user whose data should be copied to PR previews. The Cloudflare token needs the account permissions required to manage Workers Scripts, Pages, D1, and R2. Set the same `BETTER_AUTH_SECRET` on the production Worker with `wrangler secret put`; never place it in `wrangler.jsonc`.
 
 After changing `wrangler.jsonc`, run `bun run cf:typegen` and commit the generated binding declarations.
 
@@ -55,9 +55,13 @@ Pull requests from branches in this repository receive stable per-PR resources:
 
 Fork pull requests do not receive previews because repository secrets are unavailable and untrusted code must not receive production data.
 
-When the PR database is first created, the workflow applies the production migration level, exports all production D1 data, imports it into the preview database while temporarily removing and then restoring triggers, and finally applies migrations that exist only on the PR branch. Raw Funbridge JSON files are never copied: every PR receives a separate empty private R2 bucket. Empty schemas, no migrations, and empty dumps are accepted. Later pushes reuse the same preview resources and apply only pending migrations. Closing the PR deletes its Worker, Pages deployment, D1 database, and R2 bucket idempotently.
+When a PR database is first created, the workflow aligns its schema with production-applied migrations. A production D1 export exists only as a transient GitHub Actions runner file; the workflow extracts and imports only the development user named by `PREVIEW_DEVELOPER_EMAIL` and the user's systems, tournaments, imports, history indexes, boards, evaluations, and referenced deals. It does not import other users, authentication sessions, or verification records. It also copies only the corresponding import objects to the preview R2 bucket. Branch-only migrations are then applied.
 
-> **Data exposure warning:** the first preview snapshot is a complete, non-anonymized copy of production D1. Anyone who can create a branch in this repository must therefore be trusted to access production data. If that assumption is unsuitable, disable the snapshot step or replace it with a sanitized fixture process before enabling preview deployment.
+Authentication sessions are not copied to the preview database. Sign in normally with the development user's credentials; preview URLs do not sign visitors in automatically.
+
+> **Access warning:** Previews contain development-user data. Protect preview URLs with Cloudflare Access or an equivalent control when access must be limited.
+
+Empty schemas, no migrations, and empty development-user data are all valid. Later pushes reuse the same preview resources and apply only new migrations. Closing the PR deletes the Worker, Pages deployment, D1 database, and R2 bucket idempotently.
 
 Export temporarily blocks other requests to the source D1 database, so schedule unusually large snapshots with care.
 
