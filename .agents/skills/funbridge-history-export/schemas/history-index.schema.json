@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Curated Funbridge tournament history index",
+  "description": "BP Circuit, Series and Daily rows have distinct source date and result semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "capturedAt",
+    "source",
+    "family",
+    "coverage",
+    "tournaments"
+  ],
+  "properties": {
+    "format": { "const": "FUNBRIDGE_HISTORY_INDEX" },
+    "formatVersion": { "const": 1 },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "captureMode", "locale"],
+      "properties": {
+        "platform": { "const": "FUNBRIDGE_WEB" },
+        "captureMode": { "enum": ["NETWORK_RESPONSE", "MIXED", "SPA_UI"] },
+        "locale": { "type": "string", "minLength": 2 }
+      }
+    },
+    "family": { "enum": ["BP_CIRCUIT", "SERIES", "DAILY"] },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "totalCount", "rowCount"],
+      "properties": {
+        "scope": { "enum": ["NONE", "VISIBLE_WINDOW", "FULL"] },
+        "totalCount": { "type": "integer", "minimum": 0 },
+        "rowCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tournaments": { "type": "array" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "family": { "const": "BP_CIRCUIT" } } },
+      "then": {
+        "properties": {
+          "tournaments": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/bpRow" }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "family": { "const": "SERIES" } } },
+      "then": {
+        "properties": {
+          "tournaments": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/seriesRow" }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "family": { "const": "DAILY" } } },
+      "then": {
+        "properties": {
+          "tournaments": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/dailyRow" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "date": { "type": "string", "format": "date-time" },
+    "bpRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceTournamentId",
+        "title",
+        "startDate",
+        "coefficient",
+        "registeredPlayerCount",
+        "inProgress"
+      ],
+      "properties": {
+        "sourceTournamentId": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/id" },
+        "startDate": { "$ref": "#/$defs/date" },
+        "coefficient": { "$ref": "#/$defs/id" },
+        "registeredPlayerCount": { "type": "integer", "minimum": 0 },
+        "inProgress": { "type": "boolean" },
+        "rank": { "type": "integer", "minimum": 1 },
+        "bridgePoints": { "type": "number", "minimum": 0 }
+      }
+    },
+    "seriesRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceTournamentId",
+        "title",
+        "lastPlayedAt",
+        "registeredPlayerCount",
+        "inProgress",
+        "scoreType",
+        "boardCount",
+        "playedBoardCount",
+        "series"
+      ],
+      "properties": {
+        "sourceTournamentId": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/id" },
+        "lastPlayedAt": { "$ref": "#/$defs/date" },
+        "registeredPlayerCount": { "type": "integer", "minimum": 0 },
+        "inProgress": { "type": "boolean" },
+        "scoreType": { "enum": ["MP", "IMP"] },
+        "score": { "type": "number" },
+        "rank": { "type": "integer", "minimum": 1 },
+        "boardCount": { "type": "integer", "minimum": 1 },
+        "playedBoardCount": { "type": "integer", "minimum": 0 },
+        "series": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "periodStartAt", "periodEndAt"],
+          "properties": {
+            "level": { "$ref": "#/$defs/id" },
+            "periodStartAt": { "$ref": "#/$defs/date" },
+            "periodEndAt": { "$ref": "#/$defs/date" }
+          }
+        }
+      }
+    },
+    "dailyRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceTournamentId",
+        "title",
+        "startDate",
+        "registeredPlayerCount",
+        "inProgress",
+        "scoreType",
+        "score",
+        "rank",
+        "boardCount",
+        "daily"
+      ],
+      "properties": {
+        "sourceTournamentId": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/id" },
+        "startDate": { "$ref": "#/$defs/date" },
+        "registeredPlayerCount": { "type": "integer", "minimum": 0 },
+        "inProgress": { "type": "boolean" },
+        "scoreType": { "enum": ["MP", "IMP"] },
+        "score": { "type": "number" },
+        "rank": { "type": "integer", "minimum": 1 },
+        "boardCount": { "type": "integer", "minimum": 1 },
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["region"],
+          "properties": { "region": { "$ref": "#/$defs/id" } }
+        }
+      }
+    }
+  }
+}
