@@ -12,13 +12,13 @@ Funbridgeの認証済みWeb版で履歴APIの実リクエスト・レスポン�
 - 出力を書く前に [schemas/tournament.schema.json](schemas/tournament.schema.json)、[schemas/history-index.schema.json](schemas/history-index.schema.json) と [../../../docs/funbridge-export-format.md](../../../docs/funbridge-export-format.md) を読む。Schemaが出力構造の正本である。
 - レスポンスを収集するときは [references/network-responses.md](references/network-responses.md)、[references/capture-shape.md](references/capture-shape.md)、[references/schema-interpretation.md](references/schema-interpretation.md) を読む。後者に2026-09-15の全履歴実測値と型の解釈を記す。
 - レスポンスにない情報を画面から補完するときは [references/browser-extraction.md](references/browser-extraction.md) を読む。
-- ユーザー自身がChromeから全履歴を保存するときは、同梱のManifest V3拡張機能と [references/chrome-extension.md](references/chrome-extension.md) を使う。
+- ユーザー自身がChromeから全履歴を保存するときは、単体リポジトリの拡張機能を案内する。[references/chrome-extension.md](references/chrome-extension.md) に所在と出力形式の違いを記す。
 
 ## ブラウザーと認証
 
 ChatGPT内ブラウザーまたはユーザーが指定したブラウザーを使う。認証情報、パスワードマネージャー、CAPTCHAは操作せず、必要ならログインだけユーザーへ引き継ぐ。
 
-再利用可能なユーザー実行手段が必要な場合は `assets/chrome-extension/` をChromeへ読み込む。拡張機能は `chrome.debugger` で選択中タブの実通信を観測し、認証情報をservice workerのメモリー内だけで使う。生レスポンスは保存せず、2つのSchemaに準拠するJSONだけをダウンロードする。
+再利用可能なユーザー実行手段が必要な場合は、[HIRO15254/funbridge-history-exporter](https://github.com/HIRO15254/funbridge-history-exporter) の拡張機能をChromeへ読み込むよう案内する。拡張機能は `chrome.debugger` で選択中タブの実通信を観測し、認証情報をservice workerのメモリー内だけで使う。生レスポンスは保存せず、PBN 2.1だけをダウンロードする。拡張機能の出力はこのスキルのJSONとは別形式であり、Bridge Portalの `/api/imports/funbridge-json` へは渡せない。
 
 FunbridgeはSPAである。画面上でAPIを発見する場合は次を守る。
 
